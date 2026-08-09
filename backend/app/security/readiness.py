@@ -35,6 +35,9 @@ def _bitlocker_status(path: Path) -> ReadinessCheck:
         return ReadinessCheck("UNKNOWN", "manage-bde status could not be queried")
     output = f"{result.stdout}\n{result.stderr}".lower()
     if result.returncode != 0:
+        output = f"{result.stdout}\n{result.stderr}".lower()
+        if "refus" in output or "denied" in output or "access" in output:
+            return ReadinessCheck("UNKNOWN", "BitLocker status requires elevated access")
         return ReadinessCheck("UNKNOWN", "BitLocker status command failed")
     protected = "protection status" in output and ("on" in output or "activ" in output)
     return ReadinessCheck(
