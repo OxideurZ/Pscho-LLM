@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     security_enabled: bool = False
     database_key_name: str = "database-encryption"
     local_access_secret_name: str = "local-access"
+    backup_retention_count: int = Field(default=7, ge=1)
 
 
 @lru_cache

@@ -79,6 +79,7 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             resolved_settings.database_path,
             resolved_settings.data_directory / "backups",
             database_key,
+            resolved_settings.backup_retention_count,
         )
         app.state.conversation_repository = conversation_repository
         app.state.conversation_chat_service = ConversationChatService(

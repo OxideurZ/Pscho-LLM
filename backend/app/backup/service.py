@@ -21,11 +21,13 @@ class RestoreError(BackupError):
 
 class BackupService:
     def __init__(
-        self, database_path: Path, backup_directory: Path, encryption_key: bytes | None = None
+        self, database_path: Path, backup_directory: Path, encryption_key: bytes | None = None,
+        retention_count: int = 7,
     ) -> None:
         self.database_path = database_path
         self.backup_directory = backup_directory
         self.encryption_key = encryption_key
+        self.retention_count = max(1, retention_count)
 
     async def create_snapshot(self, destination: Path | None = None) -> Path:
         if not self.database_path.exists():
@@ -44,11 +46,22 @@ class BackupService:
                 self.encryption_key,
             )
             await self.verify_snapshot(resolved_destination)
+            await self.rotate_snapshots()
             return resolved_destination
         except BackupIntegrityError:
             raise
         except (OSError, sqlite3.Error, sqlcipher.Error) as error:
             raise BackupError("SQLite backup failed") from error
+
+    async def rotate_snapshots(self) -> None:
+        snapshots = sorted(self.backup_directory.glob("psych-local-*.sqlite"), key=lambda item: item.stat().st_mtime, reverse=True)
+        for candidate in snapshots[self.retention_count:]:
+            try:
+                await self.verify_snapshot(candidate)
+            except BackupIntegrityError:
+                await asyncio.to_thread(candidate.unlink, missing_ok=True)
+                continue
+            await asyncio.to_thread(candidate.unlink, missing_ok=True)
 
     async def verify_snapshot(self, snapshot: Path) -> None:
         try:
