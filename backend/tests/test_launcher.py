@@ -1,4 +1,5 @@
 import json
+from unittest.mock import Mock
 
 from backend.app.config.settings import Settings
 from scripts.launcher import Instance, Launcher
@@ -111,3 +112,16 @@ def test_start_reuses_a_healthy_discovered_stack_without_pid_file(tmp_path, monk
 
     assert opened == ["http://127.0.0.1:18000/"]
     assert not launcher.instance_path.exists()
+
+
+def test_windows_termination_forces_the_verified_process_tree(monkeypatch):
+    completed = Mock()
+    monkeypatch.setattr("scripts.launcher.sys.platform", "win32")
+    monkeypatch.setattr("scripts.launcher.subprocess.run", completed)
+
+    from scripts.launcher import terminate_owned
+
+    monkeypatch.setattr("scripts.launcher.pid_alive", lambda _pid: True)
+    terminate_owned(321)
+
+    assert completed.call_args.args[0] == ["taskkill", "/PID", "321", "/T", "/F"]

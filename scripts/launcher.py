@@ -101,7 +101,7 @@ def terminate_owned(pid: int) -> None:
         return
     if sys.platform == "win32":
         subprocess.run(
-            ["taskkill", "/PID", str(pid), "/T"],
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
