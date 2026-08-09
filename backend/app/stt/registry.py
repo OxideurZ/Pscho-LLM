@@ -114,7 +114,7 @@ class VoiceJobRegistry:
         try:
             transcript = await self.backend.transcribe(job.audio_path, cancel_event)
             async with self._lock:
-                if job.status is VoiceJobStatus.CANCEL_REQUESTED:
+                if job.status in {VoiceJobStatus.CANCEL_REQUESTED, VoiceJobStatus.CANCELLED}:
                     await self._cancel_and_cleanup(job)
                 elif not transcript.strip():
                     await self._fail_and_cleanup(job, "STT_NO_SPEECH")

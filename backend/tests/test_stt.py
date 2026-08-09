@@ -28,6 +28,15 @@ class FakeSTT(STTBackend):
         self.cancelled = True
 
 
+class LateResultSTT(FakeSTT):
+    async def transcribe(self, audio_path: Path, cancel_event: asyncio.Event) -> str:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            return "late transcript that must be discarded"
+        raise AssertionError("unreachable")
+
+
 def settings_for(tmp_path: Path) -> Settings:
     return Settings(
         data_directory=tmp_path / "runtime",
@@ -125,6 +134,22 @@ async def test_cancel_terminates_active_voice_job_and_releases_slot(tmp_path: Pa
     await registry.append_chunk(next_id, wav_chunk())
     assert (await registry.finalize(next_id)).status is VoiceJobStatus.TRANSCRIBING
     await registry.cancel(next_id)
+
+
+@pytest.mark.asyncio
+async def test_late_stt_result_after_cancel_never_becomes_transcript_ready(tmp_path: Path) -> None:
+    registry = VoiceJobRegistry(settings_for(tmp_path), LateResultSTT())
+    voice_input_id = uuid4()
+    await registry.create(voice_input_id, "conversation-a", uuid4())
+    await registry.append_chunk(voice_input_id, wav_chunk())
+    await registry.finalize(voice_input_id)
+    await asyncio.sleep(0)
+    await registry.cancel(voice_input_id)
+    await asyncio.sleep(0)
+
+    job = await registry.get(voice_input_id)
+    assert job.status is VoiceJobStatus.CANCELLED
+    assert job.transcript is None
 
 
 @pytest.mark.asyncio
