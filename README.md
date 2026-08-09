@@ -158,6 +158,9 @@ Le runner refuse toute série dont le modèle n’a pas le SHA attendu ou dont l
 app/backend sont incomplètes. Les fichiers de résultats restent ignorés tant qu’un rapport contrôlé
 n’est pas explicitement ajouté.
 
+Le premier rapport matériel contrôlé est disponible dans
+[`benchmark/results/milestone-a-2026-08-09.md`](benchmark/results/milestone-a-2026-08-09.md).
+
 ## Configuration principale
 
 | Variable | Valeur par défaut | Rôle |
