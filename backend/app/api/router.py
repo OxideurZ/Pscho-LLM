@@ -8,6 +8,8 @@ from backend.app.api.schemas import (
     ChatRequest,
     ConversationCreateRequest,
     ConversationUpdateRequest,
+    EntityUpdateRequest,
+    MemoryUpdateRequest,
     TurnRequest,
     VoiceJobCreateRequest,
 )
@@ -18,6 +20,11 @@ from backend.app.conversations import (
     ConversationNotFoundError,
 )
 from backend.app.llm.models import GenerationOptions
+from backend.app.memory import (
+    EntityNotFoundError,
+    MemoryNotFoundError,
+    MemoryStateConflictError,
+)
 from backend.app.runs.registry import RunAlreadyFinishedError, RunNotFoundError
 from backend.app.runtime import RuntimeNotManagedError
 from backend.app.security import origin_is_local, require_local_session
@@ -73,6 +80,16 @@ def voice_error(error: Exception) -> JSONResponse:
         return error_response("VOICE_JOB_CONFLICT", True, 409)
     if isinstance(error, ValueError):
         return error_response(str(error), False, 422)
+    raise error
+
+
+def memory_error(error: Exception) -> JSONResponse:
+    if isinstance(error, MemoryNotFoundError):
+        return error_response("MEMORY_NOT_FOUND", False, 404)
+    if isinstance(error, MemoryStateConflictError):
+        return error_response("MEMORY_STATE_CONFLICT", False, 409)
+    if isinstance(error, EntityNotFoundError):
+        return error_response("ENTITY_NOT_FOUND", False, 404)
     raise error
 
 
@@ -229,6 +246,140 @@ async def create_conversation(
 ) -> dict[str, Any]:
     conversation = await request.app.state.conversation_repository.create(payload.title)
     return conversation.model_dump(mode="json")
+
+
+@router.get("/memory/status", dependencies=protected)
+async def memory_status(request: Request) -> dict[str, Any]:
+    async with request.app.state.database.connect() as connection:
+        counts = await (
+            await connection.execute(
+                """
+                SELECT
+                  (SELECT COUNT(*) FROM jobs WHERE kind = 'memory_extract' AND status = 'pending'),
+                  (SELECT COUNT(*) FROM jobs WHERE kind = 'memory_extract' AND status = 'retry'),
+                  (SELECT COUNT(*) FROM jobs WHERE kind = 'memory_extract' AND status = 'failed'),
+                  (SELECT COUNT(*) FROM memory_items WHERE status = 'active'),
+                  (SELECT COUNT(*) FROM memory_items WHERE status = 'disabled')
+                """
+            )
+        ).fetchone()
+    return {
+        "memory_enabled": request.app.state.settings.memory_enabled,
+        "background_idle_seconds": request.app.state.settings.memory_background_idle_seconds,
+        "active_job_id": request.app.state.background_jobs.active_job_id,
+        "jobs": {"pending": counts[0], "retry": counts[1], "failed": counts[2]},
+        "memories": {"active": counts[3], "disabled": counts[4]},
+    }
+
+
+@router.get("/memory", response_model=None, dependencies=protected)
+async def list_memory(
+    request: Request,
+    status: str | None = None,
+    kind: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict[str, Any] | JSONResponse:
+    allowed_statuses = {"active", "disabled", "superseded"}
+    allowed_kinds = {"personal_fact", "event", "goal", "preference", "belief"}
+    if status is not None and status not in allowed_statuses:
+        return error_response("INVALID_MEMORY_STATUS", False, 422)
+    if kind is not None and kind not in allowed_kinds:
+        return error_response("INVALID_MEMORY_KIND", False, 422)
+    limit = min(max(limit, 1), 500)
+    offset = max(offset, 0)
+    items = await request.app.state.memory_repository.list_memories(
+        status=status, kind=kind, limit=limit, offset=offset
+    )
+    return {"items": items, "pagination": {"limit": limit, "offset": offset}}
+
+
+@router.get("/memory/{memory_id}", dependencies=protected)
+async def get_memory(memory_id: str, request: Request) -> JSONResponse:
+    try:
+        detail = await request.app.state.memory_repository.memory_detail(memory_id)
+    except (MemoryNotFoundError, MemoryStateConflictError) as error:
+        return memory_error(error)
+    return JSONResponse(detail)
+
+
+@router.get("/memory/{memory_id}/sources", dependencies=protected)
+async def get_memory_sources(memory_id: str, request: Request) -> JSONResponse:
+    try:
+        detail = await request.app.state.memory_repository.memory_detail(memory_id)
+    except MemoryNotFoundError as error:
+        return memory_error(error)
+    return JSONResponse({"items": detail["sources"]})
+
+
+@router.patch("/memory/{memory_id}", dependencies=protected)
+async def update_memory(
+    memory_id: str, payload: MemoryUpdateRequest, request: Request
+) -> JSONResponse:
+    try:
+        detail = await request.app.state.memory_repository.edit_memory(
+            memory_id,
+            content=payload.content,
+            kind=payload.kind,
+            epistemic_status=payload.epistemic_status,
+        )
+    except (MemoryNotFoundError, MemoryStateConflictError) as error:
+        return memory_error(error)
+    return JSONResponse(detail)
+
+
+@router.post("/memory/{memory_id}/disable", dependencies=protected)
+async def disable_memory(memory_id: str, request: Request) -> JSONResponse:
+    try:
+        detail = await request.app.state.memory_repository.set_memory_enabled(memory_id, False)
+    except (MemoryNotFoundError, MemoryStateConflictError) as error:
+        return memory_error(error)
+    return JSONResponse(detail)
+
+
+@router.post("/memory/{memory_id}/enable", dependencies=protected)
+async def enable_memory(memory_id: str, request: Request) -> JSONResponse:
+    try:
+        detail = await request.app.state.memory_repository.set_memory_enabled(memory_id, True)
+    except (MemoryNotFoundError, MemoryStateConflictError) as error:
+        return memory_error(error)
+    return JSONResponse(detail)
+
+
+@router.delete("/memory/{memory_id}", status_code=204, dependencies=protected)
+async def delete_memory(memory_id: str, request: Request) -> JSONResponse:
+    try:
+        await request.app.state.memory_repository.delete_memory(memory_id)
+    except MemoryNotFoundError as error:
+        return memory_error(error)
+    return JSONResponse(content=None, status_code=204)
+
+
+@router.get("/entities", dependencies=protected)
+async def list_entities(request: Request) -> dict[str, Any]:
+    return {"items": await request.app.state.memory_repository.list_entities()}
+
+
+@router.get("/entities/{entity_id}", dependencies=protected)
+async def get_entity(entity_id: str, request: Request) -> JSONResponse:
+    try:
+        detail = await request.app.state.memory_repository.entity_detail(entity_id)
+    except EntityNotFoundError as error:
+        return memory_error(error)
+    return JSONResponse(detail)
+
+
+@router.patch("/entities/{entity_id}", dependencies=protected)
+async def update_entity(
+    entity_id: str, payload: EntityUpdateRequest, request: Request
+) -> JSONResponse:
+    try:
+        detail = await request.app.state.memory_repository.rename_entity(
+            entity_id, payload.display_name
+        )
+    except EntityNotFoundError as error:
+        return memory_error(error)
+    return JSONResponse(detail)
 
 
 @router.get("/conversations", dependencies=protected)

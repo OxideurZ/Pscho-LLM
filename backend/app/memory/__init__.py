@@ -14,14 +14,18 @@ from backend.app.memory.models import (
     MemoryTime,
 )
 from backend.app.memory.repository import (
+    EntityNotFoundError,
     MemoryExtractionBatch,
+    MemoryNotFoundError,
     MemoryRepository,
     MemorySourceIneligibleError,
+    MemoryStateConflictError,
     MemoryUserSource,
 )
 
 __all__ = [
     "EpistemicStatus",
+    "EntityNotFoundError",
     "GroundingError",
     "GroundingResult",
     "MemoryCandidateDraft",
@@ -30,9 +34,11 @@ __all__ = [
     "MemoryExtractionResult",
     "MemoryExtractor",
     "MemoryKind",
+    "MemoryNotFoundError",
     "MemoryRepository",
     "MemorySourceSpan",
     "MemorySourceIneligibleError",
+    "MemoryStateConflictError",
     "MemoryTime",
     "MemoryUserSource",
     "canonicalize_source_spans",

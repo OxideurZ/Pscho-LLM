@@ -10,7 +10,7 @@ from backend.app.config.settings import REPOSITORY_ROOT
 from backend.app.conversations import ConversationRepository
 from backend.app.conversations.repository import new_id
 from backend.app.db import Database
-from backend.app.jobs import BackgroundJobCoordinator, JobRepository
+from backend.app.jobs import BackgroundJobCoordinator, JobKind, JobRepository
 from backend.app.memory import MemoryExtractor, MemoryRepository
 from backend.app.runs import RunRepository
 from backend.tests.fakes import FakeBackend
@@ -307,3 +307,120 @@ async def test_grounded_entity_is_created_unresolved_without_name_based_resoluti
         ("Genève", "place", "unresolved"),
     ]
     assert links == [("location", 1), ("related", 1)]
+
+
+@pytest.mark.asyncio
+async def test_user_edit_locks_memory_and_disable_blocks_same_source_recreation(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "app.sqlite"
+    database, ids = await queued_turn(path)
+    backend = StructuredBackend("Je préfère les réponses détaillées.")
+    settings = settings_for(path)
+    await run_extractor(database, backend, settings)
+    memory_repository = MemoryRepository(database)
+    async with database.connect() as connection:
+        memory_row = await (await connection.execute("SELECT id FROM memory_items")).fetchone()
+    memory_id = str(memory_row[0])
+
+    edited = await memory_repository.edit_memory(
+        memory_id,
+        content="Je préfère des réponses détaillées et structurées.",
+        kind="preference",
+        epistemic_status="stated",
+    )
+    disabled = await memory_repository.set_memory_enabled(memory_id, False)
+    await JobRepository(database).enqueue(
+        kind=JobKind.MEMORY_EXTRACT,
+        dedupe_key=f"memory_extract:disabled-check:{ids['user_message_id']}",
+        source_message_id=ids["user_message_id"],
+    )
+    await run_extractor(database, backend, settings)
+
+    async with database.connect() as connection:
+        candidate_states = await (
+            await connection.execute(
+                "SELECT status, rejection_code FROM memory_candidates ORDER BY created_at"
+            )
+        ).fetchall()
+        memory_count = await (
+            await connection.execute("SELECT COUNT(*) FROM memory_items")
+        ).fetchone()
+
+    assert edited["user_locked"] == 1
+    assert edited["revisions"][0]["actor"] == "user"
+    assert disabled["status"] == "disabled"
+    assert candidate_states[-1] == ("suppressed", "SAME_SOURCE_DISABLED")
+    assert memory_count == (1,)
+    enabled = await memory_repository.set_memory_enabled(memory_id, True)
+    assert enabled["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_structured_delete_scrubs_memory_but_preserves_user_message_and_tombstone(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "app.sqlite"
+    database, ids = await queued_turn(path)
+    backend = StructuredBackend("Je préfère les réponses détaillées.")
+    settings = settings_for(path)
+    await run_extractor(database, backend, settings)
+    memory_repository = MemoryRepository(database)
+    async with database.connect() as connection:
+        memory_row = await (await connection.execute("SELECT id FROM memory_items")).fetchone()
+    memory_id = str(memory_row[0])
+    await memory_repository.edit_memory(
+        memory_id, content="Préférence corrigée.", kind="preference", epistemic_status="stated"
+    )
+
+    await memory_repository.delete_memory(memory_id)
+
+    async with database.connect() as connection:
+        memory = await (
+            await connection.execute(
+                "SELECT status, content, deleted_at FROM memory_items WHERE id = ?", (memory_id,)
+            )
+        ).fetchone()
+        raw_user = await (
+            await connection.execute(
+                "SELECT content FROM messages WHERE id = ?", (ids["user_message_id"],)
+            )
+        ).fetchone()
+        tombstones = await (
+            await connection.execute("SELECT COUNT(*) FROM memory_tombstones")
+        ).fetchone()
+        revisions = await (
+            await connection.execute("SELECT COUNT(*) FROM memory_revisions")
+        ).fetchone()
+        sources = await (await connection.execute("SELECT COUNT(*) FROM memory_sources")).fetchone()
+        candidate = await (
+            await connection.execute("SELECT content, status FROM memory_candidates")
+        ).fetchone()
+
+    assert memory[0] == "deleted" and memory[1] is None and memory[2] is not None
+    assert raw_user == ("Je préfère les réponses détaillées.",)
+    assert tombstones == (1,)
+    assert revisions == (0,)
+    assert sources == (0,)
+    assert candidate == ("", "suppressed")
+
+    await JobRepository(database).enqueue(
+        kind=JobKind.MEMORY_EXTRACT,
+        dedupe_key=f"memory_extract:after-delete:{ids['user_message_id']}",
+        source_message_id=ids["user_message_id"],
+    )
+    await run_extractor(database, backend, settings)
+    async with database.connect() as connection:
+        latest = await (
+            await connection.execute(
+                """
+                SELECT status, rejection_code FROM memory_candidates
+                ORDER BY created_at DESC LIMIT 1
+                """
+            )
+        ).fetchone()
+        active = await (
+            await connection.execute("SELECT COUNT(*) FROM memory_items WHERE status = 'active'")
+        ).fetchone()
+    assert latest == ("suppressed", "SAME_SOURCE_TOMBSTONE")
+    assert active == (0,)

@@ -37,6 +37,8 @@ def test_secure_startup_migrates_existing_plaintext_database(tmp_path: Path) -> 
         assert response.status_code == 200
         unauthorized = client.get("/v1/conversations", headers={"host": "127.0.0.1:8000"})
         assert unauthorized.status_code == 401
+        unauthorized_memory = client.get("/v1/memory", headers={"host": "127.0.0.1:8000"})
+        assert unauthorized_memory.status_code == 401
         denied_bootstrap = client.post(
             "/v1/auth/bootstrap",
             headers={"host": "127.0.0.1:8000", "origin": "https://evil.example"},

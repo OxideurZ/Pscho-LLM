@@ -41,3 +41,19 @@ class VoiceJobCreateRequest(BaseModel):
 
 class BootstrapRequest(BaseModel):
     bootstrap_token: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class MemoryUpdateRequest(BaseModel):
+    content: str | None = Field(default=None, min_length=1, max_length=4_000)
+    kind: Literal["personal_fact", "event", "goal", "preference", "belief"] | None = None
+    epistemic_status: Literal["stated", "interpretation", "uncertain"] | None = None
+
+    @model_validator(mode="after")
+    def require_change(self) -> "MemoryUpdateRequest":
+        if not self.model_fields_set:
+            raise ValueError("At least one memory field is required")
+        return self
+
+
+class EntityUpdateRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=256)

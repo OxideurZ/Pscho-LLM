@@ -184,7 +184,15 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
                     )
         response = await call_next(request)
         if request.url.path.startswith(
-            ("/v1/auth", "/v1/conversations", "/v1/stt", "/v1/chat", "/v1/runs")
+            (
+                "/v1/auth",
+                "/v1/conversations",
+                "/v1/stt",
+                "/v1/chat",
+                "/v1/runs",
+                "/v1/memory",
+                "/v1/entities",
+            )
         ):
             response.headers["Cache-Control"] = "no-store"
         return response

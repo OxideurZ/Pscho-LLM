@@ -2,6 +2,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
+from typing import Any
 from uuid import uuid4
 
 import aiosqlite
@@ -50,9 +51,411 @@ class MemorySourceIneligibleError(RuntimeError):
     code = "MEMORY_SOURCE_INELIGIBLE"
 
 
+class MemoryNotFoundError(LookupError):
+    code = "MEMORY_NOT_FOUND"
+
+
+class MemoryStateConflictError(RuntimeError):
+    code = "MEMORY_STATE_CONFLICT"
+
+
+class EntityNotFoundError(LookupError):
+    code = "ENTITY_NOT_FOUND"
+
+
 class MemoryRepository:
     def __init__(self, database: Database) -> None:
         self.database = database
+
+    async def list_memories(
+        self,
+        *,
+        status: str | None = None,
+        kind: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        conditions = ["memory.status IN ('active', 'disabled', 'superseded')"]
+        parameters: list[object] = []
+        if status is not None:
+            conditions = ["memory.status = ?"]
+            parameters.append(status)
+        if kind is not None:
+            conditions.append("memory.kind = ?")
+            parameters.append(kind)
+        parameters.extend((limit, offset))
+        async with self.database.connect() as connection:
+            connection.row_factory = aiosqlite.Row
+            rows = await (
+                await connection.execute(
+                    f"""
+                    SELECT memory.*,
+                           (SELECT COUNT(*) FROM memory_sources AS source
+                            WHERE source.memory_id = memory.id) AS supporting_source_count
+                    FROM memory_items AS memory
+                    WHERE {" AND ".join(conditions)}
+                    ORDER BY memory.last_supported_at DESC, memory.id ASC
+                    LIMIT ? OFFSET ?
+                    """,
+                    parameters,
+                )
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    async def memory_detail(self, memory_identifier: str) -> dict[str, Any]:
+        async with self.database.connect() as connection:
+            connection.row_factory = aiosqlite.Row
+            memory = await (
+                await connection.execute(
+                    """
+                    SELECT * FROM memory_items
+                    WHERE id = ? AND status NOT IN ('deleted', 'merged')
+                    """,
+                    (memory_identifier,),
+                )
+            ).fetchone()
+            if memory is None:
+                raise MemoryNotFoundError(memory_identifier)
+            source_rows = await (
+                await connection.execute(
+                    """
+                    SELECT source.*, message.content AS message_content,
+                           message.input_type, message.created_at AS message_created_at,
+                           message.conversation_id, conversation.title AS conversation_title
+                    FROM memory_sources AS source
+                    JOIN messages AS message ON message.id = source.message_id
+                    JOIN conversations AS conversation ON conversation.id = message.conversation_id
+                    WHERE source.memory_id = ?
+                    ORDER BY message.created_at, source.start_char
+                    """,
+                    (memory_identifier,),
+                )
+            ).fetchall()
+            entity_rows = await (
+                await connection.execute(
+                    """
+                    SELECT entity.*, link.role
+                    FROM memory_entities AS link
+                    JOIN entities AS entity ON entity.id = link.entity_id
+                    WHERE link.memory_id = ? ORDER BY entity.display_name, entity.id
+                    """,
+                    (memory_identifier,),
+                )
+            ).fetchall()
+            revision_rows = await (
+                await connection.execute(
+                    """
+                    SELECT id, revision_no, old_kind, new_kind,
+                           old_epistemic_status, new_epistemic_status, actor, created_at
+                    FROM memory_revisions WHERE memory_id = ? ORDER BY revision_no DESC
+                    """,
+                    (memory_identifier,),
+                )
+            ).fetchall()
+        sources: list[dict[str, Any]] = []
+        for row in source_rows:
+            excerpt = str(row["message_content"])[row["start_char"] : row["end_char"]]
+            sources.append(
+                {
+                    "message_id": row["message_id"],
+                    "conversation_id": row["conversation_id"],
+                    "conversation_title": row["conversation_title"],
+                    "message_created_at": row["message_created_at"],
+                    "start_char": row["start_char"],
+                    "end_char": row["end_char"],
+                    "excerpt": excerpt,
+                    "input_type": row["input_type"],
+                    "source_role": row["source_role"],
+                    "hash_valid": sha256(excerpt.encode("utf-8")).hexdigest() == row["text_sha256"],
+                }
+            )
+        result = dict(memory)
+        result["supporting_source_count"] = len(sources)
+        result["sources"] = sources
+        result["entities"] = [dict(row) for row in entity_rows]
+        result["revisions"] = [dict(row) for row in revision_rows]
+        return result
+
+    async def edit_memory(
+        self,
+        memory_identifier: str,
+        *,
+        content: str | None = None,
+        kind: str | None = None,
+        epistemic_status: str | None = None,
+    ) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        async with self.database.connect() as connection:
+            connection.row_factory = aiosqlite.Row
+            await connection.execute("BEGIN IMMEDIATE")
+            try:
+                current = await (
+                    await connection.execute(
+                        """
+                        SELECT * FROM memory_items
+                        WHERE id = ? AND status IN ('active', 'disabled', 'superseded')
+                        """,
+                        (memory_identifier,),
+                    )
+                ).fetchone()
+                if current is None:
+                    raise MemoryNotFoundError(memory_identifier)
+                new_content = content if content is not None else current["content"]
+                new_kind = kind if kind is not None else current["kind"]
+                new_status = (
+                    epistemic_status
+                    if epistemic_status is not None
+                    else current["epistemic_status"]
+                )
+                revision_row = await (
+                    await connection.execute(
+                        """
+                        SELECT COALESCE(MAX(revision_no), 0) + 1
+                        FROM memory_revisions WHERE memory_id = ?
+                        """,
+                        (memory_identifier,),
+                    )
+                ).fetchone()
+                revision_no = int(revision_row[0])
+                await connection.execute(
+                    """
+                    INSERT INTO memory_revisions(
+                        id, memory_id, revision_no, old_content, new_content,
+                        old_kind, new_kind, old_epistemic_status,
+                        new_epistemic_status, actor, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', ?)
+                    """,
+                    (
+                        memory_id("revision"),
+                        memory_identifier,
+                        revision_no,
+                        current["content"],
+                        new_content,
+                        current["kind"],
+                        new_kind,
+                        current["epistemic_status"],
+                        new_status,
+                        now,
+                    ),
+                )
+                await connection.execute(
+                    """
+                    UPDATE memory_items
+                    SET content = ?, kind = ?, epistemic_status = ?,
+                        user_locked = 1, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (new_content, new_kind, new_status, now, memory_identifier),
+                )
+                await connection.commit()
+            except Exception:
+                await connection.rollback()
+                raise
+        return await self.memory_detail(memory_identifier)
+
+    async def set_memory_enabled(self, memory_identifier: str, enabled: bool) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        expected = "disabled" if enabled else "active"
+        new_status = "active" if enabled else "disabled"
+        async with self.database.connect() as connection:
+            cursor = await connection.execute(
+                """
+                UPDATE memory_items SET status = ?, disabled_at = ?, updated_at = ?
+                WHERE id = ? AND status = ?
+                """,
+                (
+                    new_status,
+                    None if enabled else now,
+                    now,
+                    memory_identifier,
+                    expected,
+                ),
+            )
+            await connection.commit()
+        if cursor.rowcount != 1:
+            existing = await self._memory_status(memory_identifier)
+            if existing is None:
+                raise MemoryNotFoundError(memory_identifier)
+            raise MemoryStateConflictError(existing)
+        return await self.memory_detail(memory_identifier)
+
+    async def delete_memory(self, memory_identifier: str, reason: str = "user_request") -> None:
+        now = datetime.now(UTC).isoformat()
+        async with self.database.connect() as connection:
+            connection.row_factory = aiosqlite.Row
+            await connection.execute("BEGIN IMMEDIATE")
+            try:
+                memory = await (
+                    await connection.execute(
+                        "SELECT * FROM memory_items WHERE id = ?", (memory_identifier,)
+                    )
+                ).fetchone()
+                if memory is None:
+                    raise MemoryNotFoundError(memory_identifier)
+                if memory["status"] == "deleted":
+                    await connection.commit()
+                    return
+                related = await (
+                    await connection.execute(
+                        "SELECT id FROM memory_items WHERE id = ? OR merged_into_memory_id = ?",
+                        (memory_identifier, memory_identifier),
+                    )
+                ).fetchall()
+                related_ids = [str(row["id"]) for row in related]
+                placeholders = ",".join("?" for _ in related_ids)
+                source_rows = await (
+                    await connection.execute(
+                        f"""
+                        SELECT DISTINCT source.message_id, source.start_char, source.end_char
+                        FROM memory_sources AS source
+                        WHERE source.memory_id IN ({placeholders})
+                        """,
+                        related_ids,
+                    )
+                ).fetchall()
+                for source in source_rows:
+                    await connection.execute(
+                        """
+                        INSERT OR IGNORE INTO memory_tombstones(
+                            id, original_memory_id, source_message_id,
+                            start_char, end_char, kind, deleted_at, reason
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            memory_id("tombstone"),
+                            memory_identifier,
+                            source["message_id"],
+                            source["start_char"],
+                            source["end_char"],
+                            memory["kind"],
+                            now,
+                            reason,
+                        ),
+                    )
+                await connection.execute(
+                    f"DELETE FROM memory_revisions WHERE memory_id IN ({placeholders})",
+                    related_ids,
+                )
+                await connection.execute(
+                    f"DELETE FROM memory_entities WHERE memory_id IN ({placeholders})",
+                    related_ids,
+                )
+                await connection.execute(
+                    f"DELETE FROM memory_sources WHERE memory_id IN ({placeholders})",
+                    related_ids,
+                )
+                candidate_rows = await (
+                    await connection.execute(
+                        f"""
+                        SELECT created_by_candidate_id FROM memory_items
+                        WHERE id IN ({placeholders}) AND created_by_candidate_id IS NOT NULL
+                        """,
+                        related_ids,
+                    )
+                ).fetchall()
+                candidate_ids = [str(row["created_by_candidate_id"]) for row in candidate_rows]
+                if candidate_ids:
+                    candidate_placeholders = ",".join("?" for _ in candidate_ids)
+                    await connection.execute(
+                        f"""
+                        DELETE FROM memory_candidate_sources
+                        WHERE candidate_id IN ({candidate_placeholders})
+                        """,
+                        candidate_ids,
+                    )
+                    await connection.execute(
+                        f"""
+                        UPDATE memory_candidates
+                        SET content = '', status = 'suppressed',
+                            rejection_code = 'USER_DELETED_MEMORY',
+                            accepted_memory_id = NULL, updated_at = ?
+                        WHERE id IN ({candidate_placeholders})
+                        """,
+                        [now, *candidate_ids],
+                    )
+                await connection.execute(
+                    f"""
+                    UPDATE memory_items
+                    SET status = 'deleted', content = NULL, deleted_at = ?,
+                        disabled_at = NULL, updated_at = ?
+                    WHERE id IN ({placeholders})
+                    """,
+                    [now, now, *related_ids],
+                )
+                await connection.commit()
+            except Exception:
+                await connection.rollback()
+                raise
+
+    async def list_entities(self) -> list[dict[str, Any]]:
+        async with self.database.connect() as connection:
+            connection.row_factory = aiosqlite.Row
+            rows = await (
+                await connection.execute(
+                    """
+                    SELECT entity.*,
+                           COUNT(DISTINCT link.memory_id) AS linked_memory_count
+                    FROM entities AS entity
+                    LEFT JOIN memory_entities AS link ON link.entity_id = entity.id
+                    GROUP BY entity.id ORDER BY entity.display_name, entity.id
+                    """
+                )
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    async def entity_detail(self, entity_identifier: str) -> dict[str, Any]:
+        async with self.database.connect() as connection:
+            connection.row_factory = aiosqlite.Row
+            entity = await (
+                await connection.execute(
+                    "SELECT * FROM entities WHERE id = ?", (entity_identifier,)
+                )
+            ).fetchone()
+            if entity is None:
+                raise EntityNotFoundError(entity_identifier)
+            aliases = await (
+                await connection.execute(
+                    "SELECT id, alias, normalized_alias FROM entity_aliases WHERE entity_id = ?",
+                    (entity_identifier,),
+                )
+            ).fetchall()
+            memories = await (
+                await connection.execute(
+                    """
+                    SELECT memory.id, memory.content, memory.kind, memory.status, link.role
+                    FROM memory_entities AS link
+                    JOIN memory_items AS memory ON memory.id = link.memory_id
+                    WHERE link.entity_id = ? AND memory.status <> 'deleted'
+                    ORDER BY memory.updated_at DESC
+                    """,
+                    (entity_identifier,),
+                )
+            ).fetchall()
+        result = dict(entity)
+        result["aliases"] = [dict(row) for row in aliases]
+        result["memories"] = [dict(row) for row in memories]
+        return result
+
+    async def rename_entity(self, entity_identifier: str, display_name: str) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        async with self.database.connect() as connection:
+            cursor = await connection.execute(
+                "UPDATE entities SET display_name = ?, updated_at = ? WHERE id = ?",
+                (display_name, now, entity_identifier),
+            )
+            await connection.commit()
+        if cursor.rowcount != 1:
+            raise EntityNotFoundError(entity_identifier)
+        return await self.entity_detail(entity_identifier)
+
+    async def _memory_status(self, memory_identifier: str) -> str | None:
+        async with self.database.connect() as connection:
+            row = await (
+                await connection.execute(
+                    "SELECT status FROM memory_items WHERE id = ?", (memory_identifier,)
+                )
+            ).fetchone()
+        return str(row[0]) if row is not None else None
 
     async def extraction_context(
         self, target_message_id: str, previous_user_count: int
