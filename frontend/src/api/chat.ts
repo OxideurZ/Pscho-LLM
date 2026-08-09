@@ -35,6 +35,12 @@ export interface RuntimeInfo {
   frontend_serving_mode: string;
 }
 
+export interface SecurityReadiness {
+  state: "READY" | "DEGRADED" | "NOT_READY";
+  checks: Record<string, { status: "PASS" | "FAIL" | "UNKNOWN"; detail: string; hard: boolean }>;
+  hard_failures: string[];
+}
+
 export interface RunMetrics {
   ttft_ms: number | null;
   input_tokens: number | null;
@@ -97,6 +103,7 @@ export async function updateConversation(
 
 export const loadHealth = () => requestJson<HealthSnapshot>("/v1/health");
 export const loadRuntimeInfo = () => requestJson<RuntimeInfo>("/v1/runtime-info");
+export const loadSecurityReadiness = () => requestJson<SecurityReadiness>("/v1/security/readiness");
 
 export const offloadRuntime = () =>
   requestJson<{ status: "shutting_down"; models: "offloading"; restart: string }>(

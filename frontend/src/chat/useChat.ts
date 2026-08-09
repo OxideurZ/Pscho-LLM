@@ -9,8 +9,10 @@ import {
   loadConversationMessages,
   loadHealth,
   loadRuntimeInfo,
+  loadSecurityReadiness,
   RunMetrics,
   RuntimeInfo,
+  SecurityReadiness,
   streamConversationTurn,
   updateConversation,
 } from "../api/chat";
@@ -56,6 +58,7 @@ export function useChat() {
   const [connectivity, setConnectivity] = useState<ConnectivityState>("reconnecting");
   const [engineAvailable, setEngineAvailable] = useState(false);
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
+  const [securityReadiness, setSecurityReadiness] = useState<SecurityReadiness | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(() => window.location.pathname === "/settings");
   const [listLoading, setListLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -99,6 +102,7 @@ export function useChat() {
         const health = await loadHealth();
         setEngineAvailable(health.llm.status === "ok" && health.llm.model_loaded);
         void loadRuntimeInfo().then(setRuntimeInfo).catch(() => undefined);
+        void loadSecurityReadiness().then(setSecurityReadiness).catch(() => undefined);
         setConnectivity("connected");
         const availableConversations = await refreshConversations();
         const id = selectedIdRef.current;
@@ -268,6 +272,6 @@ export function useChat() {
     conversations, archived, changeArchive, selectedId, selectConversation, newConversation, renameConversation, archiveConversation,
     messages, draft, setDraft, state: currentRuntime.state, runId: currentRuntime.runId, metrics: currentRuntime.metrics,
     error: currentRuntime.error, connectivity, engineAvailable, listLoading, messagesLoading, submit, submitVoice, stop, retry: reconcile,
-    settingsOpen, showSettings, runtimeInfo,
-  }), [archiveConversation, archived, changeArchive, connectivity, conversations, currentRuntime, draft, engineAvailable, listLoading, messages, messagesLoading, newConversation, reconcile, renameConversation, selectConversation, selectedId, settingsOpen, showSettings, stop, submit, submitVoice, runtimeInfo]);
+    settingsOpen, showSettings, runtimeInfo, securityReadiness,
+  }), [archiveConversation, archived, changeArchive, connectivity, conversations, currentRuntime, draft, engineAvailable, listLoading, messages, messagesLoading, newConversation, reconcile, renameConversation, selectConversation, selectedId, settingsOpen, showSettings, stop, submit, submitVoice, runtimeInfo, securityReadiness]);
 }

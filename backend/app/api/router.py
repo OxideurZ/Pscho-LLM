@@ -120,6 +120,17 @@ async def runtime_information(request: Request) -> dict[str, Any]:
     }
 
 
+@router.get("/security/readiness")
+async def security_readiness_endpoint(request: Request) -> dict[str, Any]:
+    from backend.app.security import security_readiness
+
+    return security_readiness(
+        request.app.state.settings,
+        secret_store=request.app.state.secret_store,
+        database_key=request.app.state.database.encryption_key,
+    )
+
+
 @router.post("/runtime/offload", status_code=202, dependencies=protected)
 async def offload_runtime(request: Request) -> JSONResponse:
     try:

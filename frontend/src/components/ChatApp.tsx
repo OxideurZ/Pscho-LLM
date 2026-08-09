@@ -88,7 +88,7 @@ export function ChatApp() {
         )}
         {chat.connectivity === "connected" && !chat.engineAvailable && <div className="engine-warning" role="status">Le moteur local n’est pas disponible. L’historique reste accessible.</div>}
         {offloading && <div className="offload-notice" role="status"><strong>Psych-local s’arrête.</strong> Les modèles sont déchargés de la mémoire. Relancez <code>start.ps1</code> pour reprendre.</div>}
-        {chat.settingsOpen ? <SettingsPanel runtimeInfo={chat.runtimeInfo} engineAvailable={chat.engineAvailable} connectivity={chat.connectivity} /> : <>
+        {chat.settingsOpen ? <SettingsPanel runtimeInfo={chat.runtimeInfo} securityReadiness={chat.securityReadiness} engineAvailable={chat.engineAvailable} connectivity={chat.connectivity} /> : <>
         <header className="chat-header">
           <div><p className="eyebrow">Discussion</p><h1>{chat.selectedId ? titleFor(chat.conversations.find((item) => item.id === chat.selectedId) ?? { title: null } as ConversationRecord) : "Bienvenue"}</h1></div>
           {chat.selectedId && <span className={`status status-${chat.state}`}><i />{stateLabels[chat.state]}</span>}
@@ -167,7 +167,7 @@ function voiceErrorMessage(code: string) {
   return messages[code] ?? "La dictée n’a pas pu être traitée. Vous pouvez recommencer.";
 }
 
-function SettingsPanel({ runtimeInfo, engineAvailable, connectivity }: { runtimeInfo: ReturnType<typeof useChat>["runtimeInfo"]; engineAvailable: boolean; connectivity: string }) {
+function SettingsPanel({ runtimeInfo, securityReadiness, engineAvailable, connectivity }: { runtimeInfo: ReturnType<typeof useChat>["runtimeInfo"]; securityReadiness: ReturnType<typeof useChat>["securityReadiness"]; engineAvailable: boolean; connectivity: string }) {
   return <section className="settings-panel"><header className="chat-header"><div><p className="eyebrow">Réglages</p><h1>État local</h1></div></header><div className="settings-grid">
     <Info label="Backend" value={connectivity === "connected" ? "Connecté" : connectivity === "reconnecting" ? "Reconnexion" : "Indisponible"} />
     <Info label="Moteur LLM" value={engineAvailable ? "Disponible" : "Dégradé"} />
@@ -177,6 +177,11 @@ function SettingsPanel({ runtimeInfo, engineAvailable, connectivity }: { runtime
     <Info label="Contexte" value={runtimeInfo ? `${runtimeInfo.model.context_size} tokens` : "—"} />
     <Info label="Données locales" value={runtimeInfo?.data_directory ?? "—"} />
     <Info label="Interface" value={runtimeInfo?.frontend_serving_mode ?? "—"} />
+    <Info label="Security readiness" value={securityReadiness?.state ?? "Chargement…"} />
+    <Info label="Base locale chiffrée" value={securityReadiness?.checks.encrypted_database?.status ?? "UNKNOWN"} />
+    <Info label="Clé utilisateur protégée" value={securityReadiness?.checks.key_store?.status ?? "UNKNOWN"} />
+    <Info label="Accès local protégé" value={securityReadiness?.checks.local_api_auth?.status ?? "UNKNOWN"} />
+    <Info label="Backups chiffrés" value={securityReadiness?.checks.encrypted_backup?.status ?? "UNKNOWN"} />
   </div><p className="settings-note">Ce panneau n’affiche aucun contenu de conversation. Les réglages avancés restent hors scope de cette milestone.</p></section>;
 }
 
