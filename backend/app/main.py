@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -97,9 +98,25 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             run_repository,
             REPOSITORY_ROOT,
         )
+        backup_task: asyncio.Task[None] | None = None
+        if resolved_settings.security_enabled:
+            async def periodic_backup() -> None:
+                while True:
+                    await asyncio.sleep(resolved_settings.backup_interval_seconds)
+                    try:
+                        await app.state.backup_service.create_snapshot()
+                    except Exception:
+                        # Backup failure must not interrupt chat; readiness reports it
+                        # through the operational backup check on the next inspection.
+                        continue
+
+            backup_task = asyncio.create_task(periodic_backup())
         try:
             yield
         finally:
+            if backup_task is not None:
+                backup_task.cancel()
+                await asyncio.gather(backup_task, return_exceptions=True)
             await app.state.voice_job_registry.shutdown()
 
     application = FastAPI(

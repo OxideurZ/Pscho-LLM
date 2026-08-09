@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     database_key_name: str = "database-encryption"
     local_access_secret_name: str = "local-access"
     backup_retention_count: int = Field(default=7, ge=1)
+    backup_interval_seconds: int = Field(default=6 * 60 * 60, ge=60)
 
 
 @lru_cache
