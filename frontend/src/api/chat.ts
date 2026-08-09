@@ -1,4 +1,5 @@
 import { readSSE } from "./sse";
+import { ApiError, requestJson } from "./client";
 
 export type ChatRole = "user" | "assistant";
 
@@ -13,6 +14,15 @@ export interface ChatMessage {
 export interface ConversationRecord {
   id: string;
   title: string | null;
+  archived: boolean;
+  updated_at: string;
+}
+
+export interface HealthSnapshot {
+  status: "healthy" | "degraded";
+  backend: { status: "ok" };
+  database: { status: string };
+  llm: { status: "ok" | "degraded" | "unavailable"; model_loaded: boolean };
 }
 
 export interface RunMetrics {
@@ -38,21 +48,37 @@ export interface ChatHandlers {
 }
 
 export async function createConversation(): Promise<ConversationRecord> {
-  const response = await fetch("/v1/conversations", {
+  return requestJson<ConversationRecord>("/v1/conversations", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title: null }),
   });
-  if (!response.ok) throw new Error(`HTTP_${response.status}`);
-  return response.json() as Promise<ConversationRecord>;
 }
 
+export async function listConversations(includeArchived = false): Promise<ConversationRecord[]> {
+  const query = new URLSearchParams({ limit: "50", offset: "0" });
+  if (includeArchived) query.set("include_archived", "true");
+  const body = await requestJson<{ items: ConversationRecord[] }>(`/v1/conversations?${query}`);
+  return body.items;
+}
+
+export async function updateConversation(
+  conversationId: string,
+  update: Pick<ConversationRecord, "title"> | { archived: boolean },
+): Promise<ConversationRecord> {
+  return requestJson<ConversationRecord>(`/v1/conversations/${encodeURIComponent(conversationId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+}
+
+export const loadHealth = () => requestJson<HealthSnapshot>("/v1/health");
+
 export async function loadConversationMessages(conversationId: string): Promise<ChatMessage[]> {
-  const response = await fetch(
+  const body = await requestJson<{ items: ChatMessage[] }>(
     `/v1/conversations/${encodeURIComponent(conversationId)}/messages?limit=500`,
   );
-  if (!response.ok) throw new Error(`HTTP_${response.status}`);
-  const body = await response.json() as { items: ChatMessage[] };
   return body.items;
 }
 
@@ -77,6 +103,12 @@ export async function streamConversationTurn(
     signal,
     },
   );
+
+  if (!response.ok) {
+    let payload: { error?: { code?: string; retryable?: boolean } } = {};
+    try { payload = await response.json() as typeof payload; } catch { /* handled below */ }
+    throw new ApiError(payload.error?.code ?? `HTTP_${response.status}`, Boolean(payload.error?.retryable), response.status);
+  }
 
   for await (const frame of readSSE(response)) {
     const data = frame.data as Record<string, unknown>;

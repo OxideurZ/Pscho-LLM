@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadConversationMessages, streamConversationTurn } from "./chat";
+import { listConversations, loadConversationMessages, streamConversationTurn, updateConversation } from "./chat";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -72,5 +72,19 @@ describe("persistent conversation API", () => {
     expect(handlers.onDelta).toHaveBeenCalledWith("Answer");
     expect(handlers.onDone).toHaveBeenCalledOnce();
     expect(handlers.onError).not.toHaveBeenCalled();
+  });
+
+  it("uses the paginated conversation endpoints for list and archive", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: "a", title: null, archived: false, updated_at: "now" }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "a", title: null, archived: true, updated_at: "now" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listConversations()).resolves.toHaveLength(1);
+    await updateConversation("a", { archived: true });
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/v1/conversations?limit=50&offset=0");
+    expect(fetchMock.mock.calls[1][0]).toBe("/v1/conversations/a");
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({ archived: true });
   });
 });

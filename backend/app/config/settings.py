@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     psych_local_host: str = "127.0.0.1"
     psych_local_port: int = 8000
     llama_server_url: str = "http://127.0.0.1:8080"
+    llama_server_path: Path = REPOSITORY_ROOT / "tools" / "llama.cpp-b9637" / "llama-server.exe"
     app_version: str = "0.1.0-dev"
+    frontend_dist: Path = REPOSITORY_ROOT / "frontend" / "dist"
     data_directory: Path = Field(default_factory=default_data_directory)
     database_path: Path = Field(
         default_factory=lambda: default_data_directory() / "data" / "app.sqlite"
@@ -54,6 +56,8 @@ class Settings(BaseSettings):
     backend_accelerator: str = "unknown"
     gpu_name: str = "unknown"
     gpu_vram_mb: int | None = None
+    launcher_engine_timeout_seconds: int = Field(default=120, ge=1)
+    launcher_backend_timeout_seconds: int = Field(default=45, ge=1)
 
 
 @lru_cache

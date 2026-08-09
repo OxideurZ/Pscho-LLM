@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from backend.app.api import router
 from backend.app.backup import BackupService
@@ -102,6 +102,19 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         )
 
     application.include_router(router)
+    # The normal local runtime is a two-process application: llama-server plus
+    # FastAPI.  Vite remains a development-only convenience.
+    frontend_index = resolved_settings.frontend_dist / "index.html"
+    if frontend_index.is_file():
+
+        @application.get("/{frontend_path:path}", include_in_schema=False)
+        async def frontend(frontend_path: str) -> FileResponse:
+            candidate = (resolved_settings.frontend_dist / frontend_path).resolve()
+            static_root = resolved_settings.frontend_dist.resolve()
+            if candidate.is_file() and candidate.is_relative_to(static_root):
+                return FileResponse(candidate)
+            return FileResponse(frontend_index)
+
     return application
 
 

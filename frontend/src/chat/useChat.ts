@@ -1,189 +1,235 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cancelRun,
   ChatMessage,
+  ConversationRecord,
   createConversation,
+  listConversations,
   loadConversationMessages,
+  loadHealth,
   RunMetrics,
   streamConversationTurn,
+  updateConversation,
 } from "../api/chat";
+import { ApiError, userMessageForError } from "../api/client";
 
-export type ChatState =
-  | "idle"
-  | "loading"
-  | "submitting"
-  | "starting"
-  | "preparing"
-  | "generating"
-  | "complete"
-  | "cancelled"
-  | "error";
+export type ChatState = "idle" | "submitting" | "preparing" | "generating" | "complete" | "cancelled" | "error";
+export type ConnectivityState = "connected" | "reconnecting" | "unavailable";
+
+type ConversationRuntime = {
+  state: ChatState;
+  runId: string | null;
+  metrics: RunMetrics | null;
+  error: string | null;
+};
+
+const idleRuntime = (): ConversationRuntime => ({ state: "idle", runId: null, metrics: null, error: null });
+const busyStates: ChatState[] = ["submitting", "preparing", "generating"];
+const routePrefix = "/conversations/";
+
+function routeConversationId(): string | null {
+  const match = window.location.pathname.match(/^\/conversations\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function stateFromMessages(messages: ChatMessage[]): ChatState {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant") return "idle";
+  if (last.status === "streaming") return last.content ? "generating" : "preparing";
+  if (last.status === "interrupted") return "cancelled";
+  if (last.status === "failed") return "error";
+  return "idle";
+}
 
 export function useChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversations, setConversations] = useState<ConversationRecord[]>([]);
+  const [archived, setArchived] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(routeConversationId);
+  const [messageCache, setMessageCache] = useState<Record<string, ChatMessage[]>>({});
+  const [runtimes, setRuntimes] = useState<Record<string, ConversationRuntime>>({});
   const [draft, setDraft] = useState("");
-  const [state, setState] = useState<ChatState>("idle");
-  const [runId, setRunId] = useState<string | null>(null);
-  const [metrics, setMetrics] = useState<RunMetrics | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const controller = useRef<AbortController | null>(null);
-  const activeRun = useRef<string | null>(null);
-  const conversationIdRef = useRef<string | null>(null);
+  const [connectivity, setConnectivity] = useState<ConnectivityState>("reconnecting");
+  const [engineAvailable, setEngineAvailable] = useState(false);
+  const [listLoading, setListLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const controllers = useRef<Record<string, AbortController>>({});
+  const selectedIdRef = useRef<string | null>(selectedId);
+
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
+  const currentRuntime = selectedId ? runtimes[selectedId] ?? idleRuntime() : idleRuntime();
+  const messages = selectedId ? messageCache[selectedId] ?? [] : [];
+
+  const refreshConversations = useCallback(async (includeArchived = archived) => {
+    const items = await listConversations(includeArchived);
+    setConversations(includeArchived ? items.filter((item) => item.archived) : items.filter((item) => !item.archived));
+    return items;
+  }, [archived]);
 
   const refreshMessages = useCallback(async (id: string) => {
-    setMessages(await loadConversationMessages(id));
+    setMessagesLoading(true);
+    try {
+      const persisted = await loadConversationMessages(id);
+      setMessageCache((current) => ({ ...current, [id]: persisted }));
+      setRuntimes((current) => ({
+        ...current,
+        [id]: { ...(current[id] ?? idleRuntime()), state: stateFromMessages(persisted), runId: null, error: persisted.at(-1)?.status === "failed" ? userMessageForError("LLM_GENERATION_FAILED") : null },
+      }));
+      return persisted;
+    } finally {
+      setMessagesLoading(false);
+    }
   }, []);
 
-  const ensureConversation = useCallback(async (): Promise<string> => {
-    if (conversationIdRef.current) return conversationIdRef.current;
-    const conversation = await createConversation();
-    localStorage.setItem("psych-local-conversation-id", conversation.id);
-    conversationIdRef.current = conversation.id;
-    setConversationId(conversation.id);
-    return conversation.id;
+  const reconcile = useCallback(async () => {
+    setConnectivity("reconnecting");
+    const retryDelays = [0, 350, 900];
+    let lastError: unknown;
+    for (const delay of retryDelays) {
+      if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+      try {
+        const health = await loadHealth();
+        setEngineAvailable(health.llm.status === "ok" && health.llm.model_loaded);
+        setConnectivity("connected");
+        await refreshConversations();
+        const id = selectedIdRef.current;
+        if (id) await refreshMessages(id);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    setEngineAvailable(false);
+    setConnectivity("unavailable");
+    if (lastError instanceof ApiError && lastError.code !== "BACKEND_UNAVAILABLE") {
+      // The app stays usable after the next explicit retry; no stale run is retained.
+    }
+  }, [refreshConversations, refreshMessages]);
+
+  useEffect(() => {
+    let mounted = true;
+    const initialLoad = async () => {
+      setListLoading(true);
+      await reconcile();
+      if (mounted) setListLoading(false);
+    };
+    void initialLoad();
+    const healthTimer = window.setInterval(() => { void reconcile(); }, 15_000);
+    const popState = () => { void selectConversation(routeConversationId(), false); };
+    window.addEventListener("popstate", popState);
+    return () => {
+      mounted = false;
+      window.clearInterval(healthTimer);
+      window.removeEventListener("popstate", popState);
+    };
+  // selectConversation is deliberately declared below and only invoked after mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reconcile]);
+
+  const selectConversation = useCallback(async (id: string | null, push = true) => {
+    setSelectedId(id);
+    if (id) {
+      localStorage.setItem("psych-local-conversation-id", id);
+      if (push && window.location.pathname !== `${routePrefix}${encodeURIComponent(id)}`) {
+        window.history.pushState({}, "", `${routePrefix}${encodeURIComponent(id)}`);
+      }
+      try { await refreshMessages(id); } catch { setConnectivity("unavailable"); }
+    } else if (push) {
+      window.history.pushState({}, "", "/");
+    }
+  }, [refreshMessages]);
+
+  const newConversation = useCallback(async () => {
+    try {
+      const conversation = await createConversation();
+      if (!archived) setConversations((current) => [conversation, ...current]);
+      await selectConversation(conversation.id);
+      requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Message']")?.focus());
+    } catch (error) {
+      setConnectivity("unavailable");
+      throw error;
+    }
+  }, [archived, selectConversation]);
+
+  const renameConversation = useCallback(async (id: string, title: string) => {
+    const updated = await updateConversation(id, { title: title.trim() || null });
+    setConversations((current) => current.map((item) => item.id === id ? updated : item));
   }, []);
 
-  const appendDelta = useCallback((text: string) => {
-    setMessages((current) => {
-      const next = [...current];
-      const last = next.at(-1);
-      if (last?.role === "assistant") next[next.length - 1] = { ...last, content: last.content + text };
-      return next;
+  const archiveConversation = useCallback(async (id: string) => {
+    await updateConversation(id, { archived: true });
+    setConversations((current) => current.filter((item) => item.id !== id));
+    if (selectedIdRef.current === id) await selectConversation(null);
+  }, [selectConversation]);
+
+  const changeArchive = useCallback(async (next: boolean) => {
+    setArchived(next);
+    setListLoading(true);
+    try {
+      const items = await listConversations(next);
+      setConversations(next ? items.filter((item) => item.archived) : items.filter((item) => !item.archived));
+    } catch { setConnectivity("unavailable"); }
+    finally { setListLoading(false); }
+  }, []);
+
+  const setRuntime = useCallback((id: string, update: Partial<ConversationRuntime>) => {
+    setRuntimes((current) => ({ ...current, [id]: { ...(current[id] ?? idleRuntime()), ...update } }));
+  }, []);
+
+  const appendDelta = useCallback((id: string, text: string) => {
+    setMessageCache((current) => {
+      const messages = [...(current[id] ?? [])];
+      const last = messages.at(-1);
+      if (last?.role === "assistant") messages[messages.length - 1] = { ...last, content: last.content + text, status: "streaming" };
+      return { ...current, [id]: messages };
     });
-  }, []);
-
-  const finish = useCallback((nextState: ChatState) => {
-    setState(nextState);
-    setRunId(null);
-    activeRun.current = null;
-    controller.current = null;
   }, []);
 
   const submit = useCallback(async (event?: FormEvent) => {
     event?.preventDefault();
     const content = draft.trim();
-    if (!content || ["submitting", "starting", "preparing", "generating"].includes(state)) return;
-
+    const id = selectedIdRef.current;
+    if (!content || !id || busyStates.includes(currentRuntime.state) || !engineAvailable) return;
     const clientTurnId = crypto.randomUUID();
-    setError(null);
-    setMetrics(null);
-    setState("submitting");
-
+    const abortController = new AbortController();
+    controllers.current[id] = abortController;
+    setDraft("");
+    setRuntime(id, { state: "submitting", error: null, metrics: null, runId: null });
+    setMessageCache((current) => ({ ...current, [id]: [
+      ...(current[id] ?? []),
+      { id: `pending-user-${clientTurnId}`, role: "user", content, status: "complete" },
+      { id: `pending-assistant-${clientTurnId}`, role: "assistant", content: "", status: "streaming" },
+    ] }));
     try {
-      const id = await ensureConversation();
-      setMessages((current) => [
-        ...current,
-        { id: `pending-user-${clientTurnId}`, role: "user", content, status: "complete" },
-        {
-          id: `pending-assistant-${clientTurnId}`,
-          role: "assistant",
-          content: "",
-          status: "streaming",
-        },
-      ]);
-      setDraft("");
-      const abortController = new AbortController();
-      controller.current = abortController;
-      setState("starting");
       await streamConversationTurn(id, clientTurnId, content, abortController.signal, {
-        onStarted: (id) => {
-          activeRun.current = id;
-          setRunId(id);
-          setState("preparing");
-        },
-        onDelta: (text) => {
-          setState("generating");
-          appendDelta(text);
-        },
-        onMetrics: setMetrics,
-        onDone: () => {
-          finish("complete");
-          void refreshMessages(id);
-        },
-        onCancelled: () => {
-          finish("cancelled");
-          void refreshMessages(id);
-        },
-        onError: (code, retryable) => {
-          setError(`${code}${retryable ? " — vous pouvez réessayer." : ""}`);
-          finish("error");
-          void refreshMessages(id);
-        },
+        onStarted: (runId) => setRuntime(id, { state: "preparing", runId }),
+        onDelta: (text) => { appendDelta(id, text); setRuntime(id, { state: "generating" }); },
+        onMetrics: (metrics) => setRuntime(id, { metrics }),
+        onDone: () => { setRuntime(id, { state: "complete", runId: null }); void refreshMessages(id); void refreshConversations(); },
+        onCancelled: () => { setRuntime(id, { state: "cancelled", runId: null }); void refreshMessages(id); },
+        onError: (code) => { setRuntime(id, { state: "error", runId: null, error: userMessageForError(code) }); void refreshMessages(id); },
       });
-    } catch (caught) {
-      if ((caught as Error).name === "AbortError") return;
-      setError("Connexion interrompue — vérifiez que le service local fonctionne.");
-      finish("error");
+    } catch (error) {
+      if ((error as Error).name === "AbortError") return;
+      const code = error instanceof ApiError ? error.code : "BACKEND_UNAVAILABLE";
+      setRuntime(id, { state: "error", runId: null, error: userMessageForError(code) });
+      if (code === "BACKEND_UNAVAILABLE") setConnectivity("unavailable");
+      void refreshMessages(id).catch(() => undefined);
+    } finally {
+      delete controllers.current[id];
     }
-  }, [appendDelta, draft, ensureConversation, finish, refreshMessages, state]);
+  }, [appendDelta, currentRuntime.state, draft, engineAvailable, refreshConversations, refreshMessages, setRuntime]);
 
   const stop = useCallback(async () => {
-    if (!activeRun.current) return;
-    try {
-      await cancelRun(activeRun.current);
-    } catch {
-      setError("L’arrêt n’a pas pu être confirmé.");
-      controller.current?.abort();
-      finish("error");
-    }
-  }, [finish]);
+    const id = selectedIdRef.current;
+    if (!id || !currentRuntime.runId) return;
+    try { await cancelRun(currentRuntime.runId); }
+    catch { setRuntime(id, { state: "error", error: "L’arrêt n’a pas pu être confirmé." }); }
+  }, [currentRuntime.runId, setRuntime]);
 
-  useEffect(() => {
-    let active = true;
-    const resume = async () => {
-      setState("loading");
-      try {
-        const stored = localStorage.getItem("psych-local-conversation-id");
-        if (stored) {
-          try {
-            const persisted = await loadConversationMessages(stored);
-            if (!active) return;
-            conversationIdRef.current = stored;
-            setConversationId(stored);
-            setMessages(persisted);
-            setState("idle");
-            return;
-          } catch {
-            localStorage.removeItem("psych-local-conversation-id");
-          }
-        }
-        const id = await ensureConversation();
-        if (active) {
-          await refreshMessages(id);
-          setState("idle");
-        }
-      } catch {
-        if (active) {
-          setError("Impossible de charger la conversation locale.");
-          setState("error");
-        }
-      }
-    };
-    void resume();
-    return () => {
-      active = false;
-      const id = activeRun.current;
-      if (id) {
-        void fetch(`/v1/runs/${encodeURIComponent(id)}/cancel`, {
-          method: "POST",
-          keepalive: true,
-        });
-      }
-      controller.current?.abort();
-    };
-  }, [ensureConversation, refreshMessages]);
-
-  return {
-    messages,
-    draft,
-    setDraft,
-    state,
-    runId,
-    conversationId,
-    metrics,
-    error,
-    submit,
-    stop,
-  };
+  return useMemo(() => ({
+    conversations, archived, changeArchive, selectedId, selectConversation, newConversation, renameConversation, archiveConversation,
+    messages, draft, setDraft, state: currentRuntime.state, runId: currentRuntime.runId, metrics: currentRuntime.metrics,
+    error: currentRuntime.error, connectivity, engineAvailable, listLoading, messagesLoading, submit, stop, retry: reconcile,
+  }), [archiveConversation, archived, changeArchive, connectivity, conversations, currentRuntime, draft, engineAvailable, listLoading, messages, messagesLoading, newConversation, reconcile, renameConversation, selectConversation, selectedId, stop, submit]);
 }

@@ -69,6 +69,23 @@ def test_normal_generation_is_streamed_and_persisted(tmp_path: Path) -> None:
     assert asyncio.run(read_run()) == ("complete", 8, 1)
 
 
+def test_production_frontend_is_served_with_spa_fallback(tmp_path: Path) -> None:
+    frontend = tmp_path / "frontend-dist"
+    frontend.mkdir()
+    (frontend / "index.html").write_text("<main>Psych-local C</main>", encoding="utf-8")
+    settings = settings_for(tmp_path / "runs.db").model_copy(update={"frontend_dist": frontend})
+    app = create_app(settings, FakeBackend())
+
+    with TestClient(app) as client:
+        root = client.get("/")
+        deep_link = client.get("/conversations/conversation-c")
+        health = client.get("/v1/health")
+
+    assert root.text == "<main>Psych-local C</main>"
+    assert deep_link.text == root.text
+    assert health.status_code == 200
+
+
 def test_unavailable_backend_produces_sanitized_error_and_failed_run(tmp_path: Path) -> None:
     database_path = tmp_path / "runs.db"
     app = create_app(settings_for(database_path), FakeBackend("unavailable"))
