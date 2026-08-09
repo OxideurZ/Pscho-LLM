@@ -12,7 +12,7 @@ class LLMRole(StrEnum):
 
 class LLMMessage(BaseModel):
     role: LLMRole
-    content: str = Field(min_length=1, max_length=100_000)
+    content: str = Field(min_length=1, max_length=500_000)
 
 
 class GenerationOptions(BaseModel):

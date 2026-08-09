@@ -97,3 +97,18 @@ def test_twenty_turns_leave_no_zombie_runs(tmp_path: Path) -> None:
             return row[0]
 
     assert asyncio.run(count_runs()) == 20
+
+
+def test_thirty_k_context_size_is_accepted(tmp_path: Path) -> None:
+    app = create_app(settings_for(tmp_path / "runs.db"), FakeBackend())
+    synthetic_context = "contexte " * 18_000
+    assert len(synthetic_context) > 100_000
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/chat",
+            json={"messages": [{"role": "user", "content": synthetic_context}]},
+        )
+
+    assert response.status_code == 200
+    assert "event: done" in response.text

@@ -71,6 +71,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api-url", default="http://127.0.0.1:8000")
     parser.add_argument("--repetitions", type=int, default=3)
+    parser.add_argument(
+        "--scenario",
+        action="append",
+        dest="selected_scenarios",
+        help="Run only this scenario id (repeatable)",
+    )
     parser.add_argument("--llama-pid", type=int)
     parser.add_argument("--output", type=Path, default=ROOT / "benchmark/results/technical.jsonl")
     args = parser.parse_args()
@@ -85,6 +91,8 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("a", encoding="utf-8") as output, httpx.Client(timeout=1800) as client:
         for raw in manifest["scenarios"]:
+            if args.selected_scenarios and raw["id"] not in args.selected_scenarios:
+                continue
             scenario = ContextScenario(task=manifest["task"], **raw)
             context = build_context(scenario)
             for repetition in range(args.repetitions):
