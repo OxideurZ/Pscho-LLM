@@ -87,13 +87,27 @@ class VoiceJobRegistry:
     async def cancel(self, voice_input_id: UUID) -> VoiceJob:
         async with self._lock:
             job = self._get(voice_input_id)
-            if job.terminal:
+            if job.status in {VoiceJobStatus.CANCELLED, VoiceJobStatus.FAILED}:
                 raise VoiceJobConflictError()
+            if job.status is VoiceJobStatus.TRANSCRIPT_READY:
+                job.status = VoiceJobStatus.CANCELLED
+                job.transcript = None
+                return job
             job.status = VoiceJobStatus.CANCEL_REQUESTED
             if self._active_transcription == voice_input_id:
                 await self.backend.cancel()
             await self._cancel_and_cleanup(job)
             return job
+
+    async def shutdown(self) -> None:
+        """Abandon every pre-turn job on backend shutdown; no voice state is recovered."""
+        async with self._lock:
+            await self.backend.cancel()
+            for job in self._jobs.values():
+                if not job.terminal:
+                    await self._cancel_and_cleanup(job)
+            self._active_transcription = None
+        shutil.rmtree(self._directory, ignore_errors=True)
 
     async def _transcribe(self, job: VoiceJob) -> None:
         cancel_event = asyncio.Event()

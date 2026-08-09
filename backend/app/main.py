@@ -80,7 +80,10 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             run_repository,
             REPOSITORY_ROOT,
         )
-        yield
+        try:
+            yield
+        finally:
+            await app.state.voice_job_registry.shutdown()
 
     application = FastAPI(
         title="Psych-local", version=resolved_settings.app_version, lifespan=lifespan

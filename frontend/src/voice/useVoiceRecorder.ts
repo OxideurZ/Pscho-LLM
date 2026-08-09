@@ -5,15 +5,32 @@ import {
   createVoiceJob,
   finalizeVoiceJob,
   loadVoiceJob,
-  VoiceJob,
 } from "../api/chat";
 
-export type VoiceState = "idle" | "requesting_permission" | "recording" | "transcribing" | "transcript_ready" | "cancel_requested" | "cancelled" | "error";
+export type VoiceState =
+  | "idle"
+  | "requesting_permission"
+  | "recording"
+  | "transcribing"
+  | "transcript_ready"
+  | "cancel_requested"
+  | "cancelled"
+  | "error";
 
-type VoiceBinding = { voiceInputId: string; clientTurnId: string; conversationId: string };
-const MAX_RECORDING_MS = 15 * 60 * 1000;
+export type VoiceBinding = {
+  voiceInputId: string;
+  clientTurnId: string;
+  conversationId: string;
+};
 
-export function useVoiceRecorder(onSend: (text: string, binding: VoiceBinding) => Promise<void>) {
+export const VOICE_AUTO_SEND_GRACE_MS = 1_500;
+const MAX_RECORDING_MS = 15 * 60 * 1_000;
+const NORMALIZED_SAMPLE_RATE = 16_000;
+
+export function useVoiceRecorder(
+  onSend: (text: string, binding: VoiceBinding) => Promise<void>,
+  autoSend: boolean,
+) {
   const [state, setState] = useState<VoiceState>("idle");
   const [preview, setPreview] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +39,8 @@ export function useVoiceRecorder(onSend: (text: string, binding: VoiceBinding) =
   const parts = useRef<Blob[]>([]);
   const binding = useRef<VoiceBinding | null>(null);
   const timeout = useRef<number | null>(null);
+  const discardRecording = useRef(false);
+  const previewEdited = useRef(false);
 
   const release = useCallback(() => {
     if (timeout.current !== null) window.clearTimeout(timeout.current);
@@ -36,73 +55,152 @@ export function useVoiceRecorder(onSend: (text: string, binding: VoiceBinding) =
     for (;;) {
       const job = await loadVoiceJob(voiceInputId);
       if (job.status === "transcript_ready") {
+        previewEdited.current = false;
         setPreview(job.transcript ?? "");
         setState("transcript_ready");
         return;
       }
-      if (job.status === "cancelled") { setState("cancelled"); return; }
-      if (job.status === "failed") { setError(job.error_code ?? "STT_FAILED"); setState("error"); return; }
+      if (job.status === "cancelled") {
+        setState("cancelled");
+        return;
+      }
+      if (job.status === "failed") {
+        setError(job.error_code ?? "STT_FAILED");
+        setState("error");
+        return;
+      }
       await new Promise((resolve) => window.setTimeout(resolve, 350));
     }
   }, []);
-
-  const start = useCallback(async (conversationId: string) => {
-    if (state !== "idle" && state !== "cancelled" && state !== "error") return;
-    setError(null); setPreview(""); setState("requesting_permission");
-    const frozen: VoiceBinding = { voiceInputId: crypto.randomUUID(), clientTurnId: crypto.randomUUID(), conversationId };
-    binding.current = frozen;
-    try {
-      stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-      recorder.current = new MediaRecorder(stream.current, { mimeType: "audio/webm" });
-      parts.current = [];
-      recorder.current.ondataavailable = (event) => { if (event.data.size) parts.current.push(event.data); };
-      recorder.current.onstop = () => { void uploadAndTranscribe(frozen); };
-      recorder.current.start(1_000);
-      setState("recording");
-      timeout.current = window.setTimeout(() => { void stop(); }, MAX_RECORDING_MS);
-    } catch {
-      release(); setError("MICROPHONE_UNAVAILABLE"); setState("error");
-    }
-  // stop and uploadAndTranscribe only read stable refs and are intentionally declared below.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [release, state]);
-
-  const uploadAndTranscribe = useCallback(async (frozen: VoiceBinding) => {
-    try {
-      const wav = await mediaPartsToWav(parts.current);
-      release();
-      await createVoiceJob(frozen.voiceInputId, frozen.conversationId, frozen.clientTurnId);
-      await appendVoiceChunk(frozen.voiceInputId, wav);
-      await finalizeVoiceJob(frozen.voiceInputId);
-      setState("transcribing");
-      await poll(frozen.voiceInputId);
-    } catch {
-      release(); setError("STT_FAILED"); setState("error");
-    }
-  }, [poll, release]);
-
-  const stop = useCallback(async () => {
-    if (state === "recording" && recorder.current?.state === "recording") recorder.current.stop();
-  }, [state]);
-
-  const cancel = useCallback(async () => {
-    const frozen = binding.current;
-    if (state === "recording") { recorder.current?.stop(); release(); setState("cancelled"); return; }
-    if (!frozen || state !== "transcribing") return;
-    setState("cancel_requested");
-    try { await cancelVoiceJob(frozen.voiceInputId); setState("cancelled"); }
-    catch { setError("STT_CANCEL_FAILED"); setState("error"); }
-  }, [release, state]);
 
   const send = useCallback(async () => {
     const frozen = binding.current;
     if (!frozen || !preview.trim() || state !== "transcript_ready") return;
     await onSend(preview.trim(), frozen);
-    setPreview(""); binding.current = null; setState("idle");
+    setPreview("");
+    binding.current = null;
+    setState("idle");
   }, [onSend, preview, state]);
 
+  useEffect(() => {
+    if (state !== "transcript_ready" || !autoSend || previewEdited.current || !preview.trim()) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void send().catch(() => {
+        setError("VOICE_AUTO_SEND_FAILED");
+        setState("error");
+      });
+    }, VOICE_AUTO_SEND_GRACE_MS);
+    return () => window.clearTimeout(timer);
+  }, [autoSend, preview, send, state]);
+
+  const uploadAndTranscribe = useCallback(
+    async (frozen: VoiceBinding) => {
+      try {
+        const wav = await mediaPartsToWav(parts.current);
+        release();
+        await createVoiceJob(frozen.voiceInputId, frozen.conversationId, frozen.clientTurnId);
+        await appendVoiceChunk(frozen.voiceInputId, wav);
+        await finalizeVoiceJob(frozen.voiceInputId);
+        setState("transcribing");
+        await poll(frozen.voiceInputId);
+      } catch {
+        release();
+        setError("STT_FAILED");
+        setState("error");
+      }
+    },
+    [poll, release],
+  );
+
+  const stop = useCallback(() => {
+    if (recorder.current?.state === "recording") recorder.current.stop();
+  }, []);
+
+  const start = useCallback(
+    async (conversationId: string) => {
+      if (state !== "idle" && state !== "cancelled" && state !== "error") return;
+      setError(null);
+      setPreview("");
+      discardRecording.current = false;
+      previewEdited.current = false;
+      setState("requesting_permission");
+      const frozen: VoiceBinding = {
+        voiceInputId: crypto.randomUUID(),
+        clientTurnId: crypto.randomUUID(),
+        conversationId,
+      };
+      binding.current = frozen;
+      try {
+        stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recorder.current = new MediaRecorder(stream.current, { mimeType: "audio/webm" });
+        parts.current = [];
+        recorder.current.ondataavailable = (event) => {
+          if (event.data.size) parts.current.push(event.data);
+        };
+        recorder.current.onstop = () => {
+          if (discardRecording.current) {
+            release();
+            return;
+          }
+          void uploadAndTranscribe(frozen);
+        };
+        recorder.current.start(1_000);
+        setState("recording");
+        timeout.current = window.setTimeout(stop, MAX_RECORDING_MS);
+      } catch {
+        release();
+        setError("MICROPHONE_UNAVAILABLE");
+        setState("error");
+      }
+    },
+    [release, state, stop, uploadAndTranscribe],
+  );
+
+  const updatePreview = useCallback((value: string) => {
+    previewEdited.current = true;
+    setPreview(value);
+  }, []);
+
+  const cancel = useCallback(async () => {
+    const frozen = binding.current;
+    if (state === "recording" || state === "requesting_permission") {
+      discardRecording.current = true;
+      recorder.current?.stop();
+      release();
+      binding.current = null;
+      setState("cancelled");
+      return;
+    }
+    if (!frozen || (state !== "transcribing" && state !== "transcript_ready")) return;
+    setState("cancel_requested");
+    try {
+      await cancelVoiceJob(frozen.voiceInputId);
+      setPreview("");
+      binding.current = null;
+      setState("cancelled");
+    } catch {
+      setError("STT_CANCEL_FAILED");
+      setState("error");
+    }
+  }, [release, state]);
+
   useEffect(() => () => release(), [release]);
-  return { state, preview, setPreview, error, start, stop, cancel, send };
+  useEffect(() => {
+    const abandon = () => {
+      const frozen = binding.current;
+      if (frozen && (state === "transcribing" || state === "transcript_ready")) {
+        void cancelVoiceJob(frozen.voiceInputId);
+      }
+      discardRecording.current = true;
+      recorder.current?.stop();
+      release();
+    };
+    window.addEventListener("pagehide", abandon);
+    return () => window.removeEventListener("pagehide", abandon);
+  }, [release, state]);
+  return { state, preview, setPreview: updatePreview, error, start, stop, cancel, send };
 }
 
 async function mediaPartsToWav(parts: Blob[]): Promise<Blob> {
@@ -110,18 +208,46 @@ async function mediaPartsToWav(parts: Blob[]): Promise<Blob> {
   const context = new AudioContext();
   try {
     const decoded = await context.decodeAudioData(await source.arrayBuffer());
-    const samples = decoded.getChannelData(0);
+    const offline = new OfflineAudioContext(
+      1,
+      Math.ceil(decoded.duration * NORMALIZED_SAMPLE_RATE),
+      NORMALIZED_SAMPLE_RATE,
+    );
+    const input = offline.createBufferSource();
+    input.buffer = decoded;
+    input.connect(offline.destination);
+    input.start();
+    const rendered = await offline.startRendering();
+    const samples = rendered.getChannelData(0);
     const output = new ArrayBuffer(44 + samples.length * 2);
     const view = new DataView(output);
-    writeWavHeader(view, decoded.sampleRate, samples.length);
-    for (let index = 0; index < samples.length; index += 1) view.setInt16(44 + index * 2, Math.max(-1, Math.min(1, samples[index])) * 0x7fff, true);
+    writeWavHeader(view, NORMALIZED_SAMPLE_RATE, samples.length);
+    for (let index = 0; index < samples.length; index += 1) {
+      view.setInt16(
+        44 + index * 2,
+        Math.max(-1, Math.min(1, samples[index])) * 0x7fff,
+        true,
+      );
+    }
     return new Blob([output], { type: "audio/wav" });
-  } finally { await context.close(); }
+  } finally {
+    await context.close();
+  }
 }
 
 function writeWavHeader(view: DataView, sampleRate: number, sampleCount: number) {
-  const text = (offset: number, value: string) => [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
-  text(0, "RIFF"); view.setUint32(4, 36 + sampleCount * 2, true); text(8, "WAVEfmt "); view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true); view.setUint16(34, 16, true); text(36, "data"); view.setUint32(40, sampleCount * 2, true);
+  const text = (offset: number, value: string) =>
+    [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
+  text(0, "RIFF");
+  view.setUint32(4, 36 + sampleCount * 2, true);
+  text(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  text(36, "data");
+  view.setUint32(40, sampleCount * 2, true);
 }

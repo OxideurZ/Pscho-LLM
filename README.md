@@ -286,6 +286,9 @@ Le premier rapport matériel contrôlé est disponible dans
 | `MODEL_EXPECTED_SHA256` | hash canonique | garde-fou benchmark |
 | `LLAMA_CPP_VERSION` / `BUILD` | `b9637` / commit épinglé | identité du backend |
 | `LLAMA_CPP_REASONING` | `off` | mode de raisonnement de la baseline |
+| `WHISPER_CPP_PATH` | binaire local `whisper-cli.exe` | STT local sélectionné pour la voix |
+| `WHISPER_MODEL_PATH` / `EXPECTED_SHA256` | Whisper Large-v3-Turbo local | modèle STT vérifié au démarrage |
+| `MAX_RECORDING_DURATION_SECONDS` | `900` | limite dure d’une dictée (15 minutes) |
 | `DEFAULT_*` | voir `.env.example` | paramètres de génération |
 | `CONTEXT_SIZE` | `32768` | fenêtre de contexte déclarée |
 

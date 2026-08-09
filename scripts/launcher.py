@@ -173,6 +173,18 @@ class Launcher:
                 "Aucun téléchargement automatique n’est effectué."
             )
         verify(self.settings.model_path, self.settings.model_expected_sha256)
+        if not self.settings.whisper_cpp_path.is_file():
+            raise FileNotFoundError(
+                "whisper-cli introuvable : "
+                f"{self.settings.whisper_cpp_path}. Corrigez WHISPER_CPP_PATH."
+            )
+        if not self.settings.whisper_model_path.is_file():
+            raise FileNotFoundError(
+                "Modèle STT attendu absent : "
+                f"{self.settings.whisper_model_path}. "
+                "Aucun téléchargement automatique n’est effectué."
+            )
+        verify(self.settings.whisper_model_path, self.settings.whisper_model_expected_sha256)
 
     def assert_ports_available(self) -> None:
         backend_health = local_url(self.settings.psych_local_host, self.backend_port, "/v1/health")

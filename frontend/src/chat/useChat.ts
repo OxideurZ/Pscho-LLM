@@ -218,7 +218,8 @@ export function useChat() {
     event?.preventDefault();
     const content = (suppliedContent ?? draft).trim();
     const id = suppliedConversationId ?? selectedIdRef.current;
-    if (!content || !id || busyStates.includes(currentRuntime.state) || !engineAvailable) return;
+    const targetRuntime = id ? runtimes[id] ?? idleRuntime() : idleRuntime();
+    if (!content || !id || busyStates.includes(targetRuntime.state) || !engineAvailable) return;
     const clientTurnId = suppliedClientTurnId ?? crypto.randomUUID();
     const abortController = new AbortController();
     controllers.current[id] = abortController;
@@ -247,7 +248,7 @@ export function useChat() {
     } finally {
       delete controllers.current[id];
     }
-  }, [appendDelta, currentRuntime.state, draft, engineAvailable, refreshConversations, refreshMessages, setRuntime]);
+  }, [appendDelta, draft, engineAvailable, refreshConversations, refreshMessages, runtimes, setRuntime]);
 
   const submitVoice = useCallback(
     async (content: string, clientTurnId: string, conversationId: string) => {

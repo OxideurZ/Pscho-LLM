@@ -68,6 +68,10 @@ async def test_voice_job_keeps_audio_ephemeral_and_returns_transcript(tmp_path: 
     assert job.transcript == "dictée synthétique"
     assert not job.audio_path.parent.exists()
 
+    cancelled = await registry.cancel(voice_input_id)
+    assert cancelled.status is VoiceJobStatus.CANCELLED
+    assert cancelled.transcript is None
+
 
 @pytest.mark.asyncio
 async def test_silence_never_creates_a_transcript(tmp_path: Path) -> None:
@@ -113,3 +117,20 @@ async def test_second_transcription_is_rejected_while_first_is_active(tmp_path: 
     with pytest.raises(VoiceJobConflictError):
         await registry.finalize(second_id)
     await registry.cancel(first_id)
+
+
+@pytest.mark.asyncio
+async def test_shutdown_abandons_incomplete_jobs_and_removes_ephemeral_audio(
+    tmp_path: Path,
+) -> None:
+    backend = FakeSTT("wait")
+    registry = VoiceJobRegistry(settings_for(tmp_path), backend)
+    voice_input_id = uuid4()
+    job = await registry.create(voice_input_id, "conversation-a", uuid4())
+    await registry.append_chunk(voice_input_id, wav_chunk())
+    await registry.finalize(voice_input_id)
+
+    await registry.shutdown()
+
+    assert backend.cancelled
+    assert not job.audio_path.parent.exists()

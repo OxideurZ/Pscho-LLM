@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ConversationRecord } from "../api/chat";
 import { useChat } from "../chat/useChat";
 import { useVoiceRecorder } from "../voice/useVoiceRecorder";
@@ -22,9 +22,13 @@ export function ChatApp() {
   const end = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLElement>(null);
   const busy = ["submitting", "preparing", "generating"].includes(chat.state);
-  const voice = useVoiceRecorder(
-    async (text, binding) => chat.submitVoice(text, binding.clientTurnId, binding.conversationId),
+  const [autoSendVoice, setAutoSendVoice] = useState(true);
+  const submitVoice = useCallback(
+    async (text: string, binding: { clientTurnId: string; conversationId: string }) =>
+      chat.submitVoice(text, binding.clientTurnId, binding.conversationId),
+    [chat],
   );
+  const voice = useVoiceRecorder(submitVoice, autoSendVoice);
   const canFollow = () => {
     const node = scroller.current;
     return !node || node.scrollHeight - node.scrollTop - node.clientHeight < 96;
@@ -94,6 +98,7 @@ export function ChatApp() {
           <textarea aria-label="Message" placeholder={chat.selectedId ? "Écrire un message…" : "Créez une conversation pour commencer"} value={chat.draft} onChange={(event) => chat.setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void chat.submit(); } }} disabled={!chat.selectedId || busy || !chat.engineAvailable || chat.connectivity !== "connected"} rows={2} />
           <button type="submit" disabled={!chat.selectedId || busy || !chat.draft.trim() || !chat.engineAvailable || chat.connectivity !== "connected"} aria-label="Envoyer">↑</button>
         </form>
+        <label className="voice-auto-send"><input type="checkbox" checked={autoSendVoice} onChange={(event) => setAutoSendVoice(event.target.checked)} /> Envoyer automatiquement la dictée</label>
         <VoiceControls
           enabled={Boolean(chat.selectedId && chat.engineAvailable && chat.connectivity === "connected" && !busy)}
           selectedId={chat.selectedId}
