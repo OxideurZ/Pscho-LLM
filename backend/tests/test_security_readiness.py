@@ -6,7 +6,11 @@ from backend.app.security.readiness import security_readiness
 
 def test_readiness_fails_closed_when_security_is_disabled(tmp_path: Path) -> None:
     result = security_readiness(
-        Settings(data_directory=tmp_path, database_path=tmp_path / "data" / "app.sqlite", security_enabled=False),
+        Settings(
+            data_directory=tmp_path,
+            database_path=tmp_path / "data" / "app.sqlite",
+            security_enabled=False,
+        ),
         secret_store=None,
         database_key=None,
     )

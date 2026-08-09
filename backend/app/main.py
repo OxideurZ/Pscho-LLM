@@ -15,6 +15,7 @@ from backend.app.context import ContextBuilder
 from backend.app.conversations.repository import ConversationRepository
 from backend.app.conversations.service import ConversationChatService
 from backend.app.db import Database
+from backend.app.db.migration import EncryptedDatabaseMigrator
 from backend.app.llm.base import LLMBackend
 from backend.app.llm.llama_cpp import LlamaCppBackend
 from backend.app.runs import RunRegistry, RunRepository
@@ -37,6 +38,11 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         if resolved_settings.security_enabled:
             secret_store = WindowsDpapiSecretStore(resolved_settings.data_directory / "security")
             database_key = secret_store.create(resolved_settings.database_key_name)
+            if resolved_settings.database_path.is_file():
+                with resolved_settings.database_path.open("rb") as database_file:
+                    header = database_file.read(16)
+                if header == b"SQLite format 3\x00":
+                    EncryptedDatabaseMigrator(database_key).migrate(resolved_settings.database_path)
         database = Database(
             resolved_settings.database_path,
             REPOSITORY_ROOT / "migrations",
