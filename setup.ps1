@@ -14,7 +14,7 @@ Need-Command pnpm "Activez corepack (corepack enable) puis relancez .\setup.ps1.
 
 if (-not (Test-Path .venv\Scripts\python.exe)) { python -m venv .venv }
 & .\.venv\Scripts\python.exe -m pip install --upgrade pip
-& .\.venv\Scripts\python.exe -m pip install -e .
+& .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 Push-Location frontend
 pnpm install --frozen-lockfile
 pnpm build

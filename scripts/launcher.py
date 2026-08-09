@@ -21,6 +21,8 @@ from datetime import UTC, datetime
 from urllib.error import URLError
 from urllib.request import urlopen
 
+import psutil
+
 from backend.app.config.settings import REPOSITORY_ROOT, Settings
 from scripts.verify_model import verify
 
@@ -81,6 +83,19 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
+def process_identity_matches(pid: int, *tokens: str) -> bool:
+    """Check command-line identity before treating a PID as ours.
+
+    A PID in instance.json is advisory only: Windows may reuse it after a
+    crash. This is intentionally conservative when process inspection fails.
+    """
+    try:
+        command = " ".join(psutil.Process(pid).cmdline()).lower()
+    except (psutil.Error, OSError):
+        return False
+    return all(token.lower() in command for token in tokens)
+
+
 def terminate_owned(pid: int) -> None:
     if not pid_alive(pid):
         return
@@ -131,6 +146,8 @@ class Launcher:
             and instance.llama_port == self.llama_port
             and pid_alive(instance.backend_pid)
             and pid_alive(instance.llama_pid)
+            and process_identity_matches(instance.backend_pid, "uvicorn", "backend.app.main:app")
+            and process_identity_matches(instance.llama_pid, "llama-server")
             and reachable(backend_url)
             and reachable(llama_url)
         )
@@ -177,6 +194,15 @@ class Launcher:
     def start(self, open_browser: bool) -> None:
         if self.healthy_instance():
             self.log("instance_state=existing_healthy")
+            if open_browser:
+                webbrowser.open(local_url(self.settings.psych_local_host, self.backend_port, "/"))
+            return
+        # A healthy local API plus a healthy engine is a stronger identity signal
+        # than a stale/missing PID file. Do not create a duplicate stack.
+        if reachable(
+            local_url(self.settings.psych_local_host, self.backend_port, "/v1/health")
+        ) and reachable(f"{self.settings.llama_server_url}/health"):
+            self.log("instance_state=discovered_healthy")
             if open_browser:
                 webbrowser.open(local_url(self.settings.psych_local_host, self.backend_port, "/"))
             return
@@ -265,11 +291,15 @@ class Launcher:
             print("Aucune instance Psych-local gérée n’est active.")
             return
         # Require both identity signals (recorded PID and local health) before owning a process.
-        if reachable(
+        if process_identity_matches(
+            instance.backend_pid, "uvicorn", "backend.app.main:app"
+        ) and reachable(
             local_url(self.settings.psych_local_host, instance.backend_port, "/v1/health")
         ):
             terminate_owned(instance.backend_pid)
-        if reachable(f"http://{self.settings.psych_local_host}:{instance.llama_port}/health"):
+        if process_identity_matches(instance.llama_pid, "llama-server") and reachable(
+            f"http://{self.settings.psych_local_host}:{instance.llama_port}/health"
+        ):
             terminate_owned(instance.llama_pid)
         self.instance_path.unlink(missing_ok=True)
         self.log("instance_state=stopped")

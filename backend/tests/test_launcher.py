@@ -31,6 +31,7 @@ def test_stale_instance_is_not_trusted_from_pid_alone(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setattr("scripts.launcher.pid_alive", lambda _pid: True)
+    monkeypatch.setattr("scripts.launcher.process_identity_matches", lambda *_args: True)
     monkeypatch.setattr("scripts.launcher.reachable", lambda _url: False)
 
     assert launcher.healthy_instance() is False
@@ -56,9 +57,34 @@ def test_healthy_instance_requires_matching_ports_pids_and_health(tmp_path, monk
         encoding="utf-8",
     )
     monkeypatch.setattr("scripts.launcher.pid_alive", lambda _pid: True)
+    monkeypatch.setattr("scripts.launcher.process_identity_matches", lambda *_args: True)
     monkeypatch.setattr("scripts.launcher.reachable", lambda _url: True)
 
     assert launcher.healthy_instance() is True
+
+
+def test_reused_pid_with_a_third_party_command_is_not_owned(tmp_path, monkeypatch):
+    launcher = Launcher(settings_for_launcher(tmp_path))
+    launcher.instance_path.write_text(
+        json.dumps(
+            Instance(
+                instance_id="instance-a",
+                started_at="2026-08-09T00:00:00Z",
+                launcher_pid=1,
+                backend_pid=123,
+                llama_pid=456,
+                frontend_pid=None,
+                backend_port=18000,
+                llama_port=18080,
+            ).__dict__
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("scripts.launcher.pid_alive", lambda _pid: True)
+    monkeypatch.setattr("scripts.launcher.process_identity_matches", lambda *_args: False)
+    monkeypatch.setattr("scripts.launcher.reachable", lambda _url: True)
+
+    assert launcher.healthy_instance() is False
 
 
 def test_port_collision_never_attempts_to_kill_a_third_party(tmp_path, monkeypatch):
@@ -72,3 +98,16 @@ def test_port_collision_never_attempts_to_kill_a_third_party(tmp_path, monkeypat
         assert "aucun processus n’a été arrêté" in str(error)
     else:
         raise AssertionError("a foreign port collision must be reported")
+
+
+def test_start_reuses_a_healthy_discovered_stack_without_pid_file(tmp_path, monkeypatch):
+    launcher = Launcher(settings_for_launcher(tmp_path))
+    opened = []
+    monkeypatch.setattr(launcher, "healthy_instance", lambda: False)
+    monkeypatch.setattr("scripts.launcher.reachable", lambda _url: True)
+    monkeypatch.setattr("scripts.launcher.webbrowser.open", opened.append)
+
+    launcher.start(open_browser=True)
+
+    assert opened == ["http://127.0.0.1:18000/"]
+    assert not launcher.instance_path.exists()

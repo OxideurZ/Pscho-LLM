@@ -46,7 +46,9 @@ function stateFromMessages(messages: ChatMessage[]): ChatState {
 export function useChat() {
   const [conversations, setConversations] = useState<ConversationRecord[]>([]);
   const [archived, setArchived] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(routeConversationId);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => routeConversationId() ?? localStorage.getItem("psych-local-conversation-id"),
+  );
   const [messageCache, setMessageCache] = useState<Record<string, ChatMessage[]>>({});
   const [runtimes, setRuntimes] = useState<Record<string, ConversationRuntime>>({});
   const [draft, setDraft] = useState("");
@@ -96,9 +98,15 @@ export function useChat() {
         setEngineAvailable(health.llm.status === "ok" && health.llm.model_loaded);
         void loadRuntimeInfo().then(setRuntimeInfo).catch(() => undefined);
         setConnectivity("connected");
-        await refreshConversations();
+        const availableConversations = await refreshConversations();
         const id = selectedIdRef.current;
-        if (id) await refreshMessages(id);
+        if (id && availableConversations.some((conversation) => conversation.id === id)) {
+          await refreshMessages(id);
+        } else if (id) {
+          setSelectedId(null);
+          localStorage.removeItem("psych-local-conversation-id");
+          if (window.location.pathname.startsWith(routePrefix)) window.history.replaceState({}, "", "/");
+        }
         return;
       } catch (error) {
         lastError = error;
