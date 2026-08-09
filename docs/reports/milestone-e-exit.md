@@ -31,7 +31,7 @@
 | API cache | middleware and route audit | PASS |
 | Local API session | elevated integration test: no cookie `401`, missing token `403`, evil Origin `403`, DPAPI-bound fragment bootstrap then conversation access `200` | PASS |
 | Offline / network policy | loopback and no-telemetry source tests | PASS (policy); full offline workstation run remains unverified |
-| Backend regression | full elevated Windows harness: `92 passed` | PASS |
+| Backend regression | full elevated Windows harness after final bootstrap fix: `93 passed` | PASS |
 | Disk encryption | `manage-bde -status C:` denied by current non-admin execution context | UNKNOWN / hard gate not proven |
 | Data-directory ACL | default `%LOCALAPPDATA%\\PsychLocal` ACL is owner/System/Administrators only; repository test directory is intentionally not the production data directory | PASS for default path; repository path not a readiness target |
 | Other Windows account | not executed from a second standard account | UNVERIFIED |
