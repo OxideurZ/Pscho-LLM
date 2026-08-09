@@ -1,0 +1,1 @@
+"""Psych-local FastAPI application."""
