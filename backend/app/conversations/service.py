@@ -299,6 +299,7 @@ class ConversationChatService:
                 "user_message_id": turn.user_message.id,
                 "assistant_message_id": turn.assistant_message.id,
                 "reused": True,
+                "idempotency_code": "TURN_ALREADY_EXISTS",
             },
         )
         if turn.assistant_message.content:

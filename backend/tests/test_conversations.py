@@ -136,6 +136,7 @@ def test_crud_turn_order_and_retry_are_persistent(tmp_path: Path) -> None:
     assert first.text.endswith("event: done\ndata: {}\n\n")
     assert retry.status_code == 200
     assert '"reused":true' in retry.text
+    assert '"idempotency_code":"TURN_ALREADY_EXISTS"' in retry.text
     assert "Bonjour" in retry.text
     message_states = [
         (message["sequence_no"], message["role"], message["status"]) for message in messages
