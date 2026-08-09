@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.app.api.schemas import (
+    BootstrapRequest,
     ChatRequest,
     ConversationCreateRequest,
     ConversationUpdateRequest,
@@ -32,11 +33,12 @@ def error_response(code: str, retryable: bool, status_code: int) -> JSONResponse
 
 
 @router.post("/auth/bootstrap", dependencies=[])
-async def bootstrap_session(request: Request) -> JSONResponse:
+async def bootstrap_session(payload: BootstrapRequest, request: Request) -> JSONResponse:
     if request.app.state.settings.security_enabled and not origin_is_local(request):
         return error_response("LOCAL_ORIGIN_REQUIRED", False, 403)
     response = JSONResponse({"status": "authenticated"})
-    request.app.state.local_session_manager.issue(response)
+    if not request.app.state.local_session_manager.issue(response, payload.bootstrap_token):
+        return error_response("LOCAL_BOOTSTRAP_REQUIRED", False, 403)
     return response
 
 

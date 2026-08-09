@@ -37,3 +37,7 @@ class VoiceJobCreateRequest(BaseModel):
     voice_input_id: UUID
     conversation_id: str = Field(min_length=1, max_length=100)
     client_turn_id: UUID
+
+
+class BootstrapRequest(BaseModel):
+    bootstrap_token: str | None = Field(default=None, min_length=1, max_length=128)

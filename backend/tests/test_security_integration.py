@@ -31,7 +31,8 @@ def test_secure_startup_migrates_existing_plaintext_database(tmp_path: Path) -> 
         security_enabled=True,
         model_expected_sha256="a" * 64,
     )
-    with TestClient(create_app(settings, FakeBackend())) as client:
+    app = create_app(settings, FakeBackend())
+    with TestClient(app) as client:
         response = client.get("/v1/health", headers={"host": "127.0.0.1:8000"})
         assert response.status_code == 200
         unauthorized = client.get("/v1/conversations", headers={"host": "127.0.0.1:8000"})
@@ -39,11 +40,19 @@ def test_secure_startup_migrates_existing_plaintext_database(tmp_path: Path) -> 
         denied_bootstrap = client.post(
             "/v1/auth/bootstrap",
             headers={"host": "127.0.0.1:8000", "origin": "https://evil.example"},
+            json={"bootstrap_token": "invalid"},
         )
         assert denied_bootstrap.status_code == 403
+        missing_bootstrap = client.post(
+            "/v1/auth/bootstrap",
+            headers={"host": "127.0.0.1:8000", "origin": "http://127.0.0.1:5173"},
+            json={},
+        )
+        assert missing_bootstrap.status_code == 403
         bootstrap = client.post(
             "/v1/auth/bootstrap",
             headers={"host": "127.0.0.1:8000", "origin": "http://127.0.0.1:5173"},
+            json={"bootstrap_token": app.state.local_session_manager._bootstrap_token},
         )
         assert bootstrap.status_code == 200
         assert (

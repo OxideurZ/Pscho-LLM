@@ -11,6 +11,7 @@ def settings_for_launcher(tmp_path):
         database_path=tmp_path / "data" / "app.sqlite",
         psych_local_port=18000,
         llama_server_url="http://127.0.0.1:18080",
+        security_enabled=False,
     )
 
 
@@ -112,6 +113,17 @@ def test_start_reuses_a_healthy_discovered_stack_without_pid_file(tmp_path, monk
 
     assert opened == ["http://127.0.0.1:18000/"]
     assert not launcher.instance_path.exists()
+
+
+def test_secure_browser_url_uses_fragment_not_query_string(tmp_path, monkeypatch):
+    settings = settings_for_launcher(tmp_path).model_copy(update={"security_enabled": True})
+    launcher = Launcher(settings)
+    monkeypatch.setattr("scripts.launcher.WindowsDpapiSecretStore.get", lambda *_args: b"secret")
+
+    url = launcher.browser_url()
+
+    assert "?" not in url
+    assert url.startswith("http://127.0.0.1:18000/#bootstrap=")
 
 
 def test_windows_termination_forces_the_verified_process_tree(monkeypatch):

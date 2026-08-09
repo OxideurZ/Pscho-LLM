@@ -37,6 +37,11 @@ function routeConversationId(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function bootstrapTokenFromFragment(): string | undefined {
+  const token = new URLSearchParams(window.location.hash.slice(1)).get("bootstrap") ?? undefined;
+  return token;
+}
+
 function stateFromMessages(messages: ChatMessage[]): ChatState {
   const last = messages.at(-1);
   if (last?.role !== "assistant") return "idle";
@@ -98,7 +103,9 @@ export function useChat() {
     for (const delay of retryDelays) {
       if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
       try {
-        await bootstrapSession();
+        const bootstrapToken = bootstrapTokenFromFragment();
+        await bootstrapSession(bootstrapToken);
+        if (bootstrapToken) window.history.replaceState({}, "", window.location.pathname);
         const health = await loadHealth();
         setEngineAvailable(health.llm.status === "ok" && health.llm.model_loaded);
         void loadRuntimeInfo().then(setRuntimeInfo).catch(() => undefined);

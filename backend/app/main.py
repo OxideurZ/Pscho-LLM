@@ -35,9 +35,11 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             (resolved_settings.data_directory / directory).mkdir(parents=True, exist_ok=True)
         secret_store: SecretStore | None = None
         database_key: bytes | None = None
+        local_access_secret: bytes | None = None
         if resolved_settings.security_enabled:
             secret_store = WindowsDpapiSecretStore(resolved_settings.data_directory / "security")
             database_key = secret_store.create(resolved_settings.database_key_name)
+            local_access_secret = secret_store.create(resolved_settings.local_access_secret_name)
             if resolved_settings.database_path.is_file():
                 with resolved_settings.database_path.open("rb") as database_file:
                     header = database_file.read(16)
@@ -72,7 +74,7 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         app.state.settings = resolved_settings
         app.state.secret_store = secret_store
         app.state.local_session_manager = LocalSessionManager(
-            resolved_settings.session_timeout_seconds
+            resolved_settings.session_timeout_seconds, local_access_secret
         )
         app.state.database = database
         app.state.llm_backend = resolved_backend

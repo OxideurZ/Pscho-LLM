@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import secrets
+from base64 import urlsafe_b64encode
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, Request, Response
@@ -10,11 +12,22 @@ SESSION_COOKIE = "psych_local_session"
 
 
 class LocalSessionManager:
-    def __init__(self, timeout_seconds: int = 30 * 60) -> None:
+    def __init__(
+        self, timeout_seconds: int = 30 * 60, bootstrap_secret: bytes | None = None
+    ) -> None:
         self.timeout_seconds = timeout_seconds
+        self._bootstrap_token = (
+            urlsafe_b64encode(bootstrap_secret).rstrip(b"=").decode("ascii")
+            if bootstrap_secret is not None
+            else None
+        )
         self._sessions: dict[str, datetime] = {}
 
-    def issue(self, response: Response) -> None:
+    def issue(self, response: Response, bootstrap_token: str | None = None) -> bool:
+        if self._bootstrap_token is not None and not (
+            bootstrap_token and hmac.compare_digest(bootstrap_token, self._bootstrap_token)
+        ):
+            return False
         token = secrets.token_urlsafe(32)
         self._sessions[self._digest(token)] = self._expiry()
         response.set_cookie(
@@ -26,6 +39,7 @@ class LocalSessionManager:
             secure=False,
             path="/",
         )
+        return True
 
     def valid(self, token: str | None) -> bool:
         if not token:

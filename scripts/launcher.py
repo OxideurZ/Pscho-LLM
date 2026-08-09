@@ -16,6 +16,7 @@ import sys
 import time
 import uuid
 import webbrowser
+from base64 import urlsafe_b64encode
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from urllib.error import URLError
@@ -24,6 +25,7 @@ from urllib.request import urlopen
 import psutil
 
 from backend.app.config.settings import REPOSITORY_ROOT, Settings
+from backend.app.security import WindowsDpapiSecretStore
 from scripts.verify_model import verify
 
 
@@ -214,7 +216,7 @@ class Launcher:
         if self.healthy_instance():
             self.log("instance_state=existing_healthy")
             if open_browser:
-                webbrowser.open(local_url(self.settings.psych_local_host, self.backend_port, "/"))
+                webbrowser.open(self.browser_url())
             return
         # A healthy local API plus a healthy engine is a stronger identity signal
         # than a stale/missing PID file. Do not create a duplicate stack.
@@ -223,7 +225,7 @@ class Launcher:
         ) and reachable(f"{self.settings.llama_server_url}/health"):
             self.log("instance_state=discovered_healthy")
             if open_browser:
-                webbrowser.open(local_url(self.settings.psych_local_host, self.backend_port, "/"))
+                webbrowser.open(self.browser_url())
             return
         self.clear_stale()
         self.verify_installation()
@@ -295,7 +297,7 @@ class Launcher:
             self.instance_path.write_text(json.dumps(asdict(instance), indent=2), encoding="utf-8")
             self.log("instance_state=ready")
             if open_browser:
-                webbrowser.open(local_url(self.settings.psych_local_host, self.backend_port, "/"))
+                webbrowser.open(self.browser_url())
         except Exception:
             if backend is not None:
                 terminate_owned(backend.pid)
@@ -303,6 +305,16 @@ class Launcher:
                 terminate_owned(llama.pid)
             self.log("instance_state=start_failed_cleanup=attempted")
             raise
+
+    def browser_url(self) -> str:
+        root = local_url(self.settings.psych_local_host, self.backend_port, "/")
+        if not self.settings.security_enabled:
+            return root
+        launch_secret = WindowsDpapiSecretStore(self.settings.data_directory / "security").get(
+            self.settings.local_access_secret_name
+        )
+        bootstrap_token = urlsafe_b64encode(launch_secret).rstrip(b"=").decode("ascii")
+        return f"{root}#bootstrap={bootstrap_token}"
 
     def stop(self) -> None:
         instance = self.read_instance()

@@ -11,7 +11,7 @@
 - Fail-closed plaintext-to-encrypted migration path with validation and atomic replacement.
 - Windows user-scoped DPAPI `SecretStore`; database and local-session secret names are distinct.
 - Encrypted, verified backups, conservative retention and periodic backup scheduling.
-- HttpOnly/SameSite strict local session cookie, origin-gated bootstrap and protected sensitive API routes.
+- HttpOnly/SameSite strict local session cookie, origin-gated bootstrap bound to a distinct DPAPI secret, and protected sensitive API routes.
 - Conversation content is kept in React memory only; no application `localStorage`, `sessionStorage`, IndexedDB or CacheStorage use.
 - Sensitive API responses receive `Cache-Control: no-store`.
 - `SecurityReadiness` projection and Settings display expose hard-check failures instead of advertising a false green state.
@@ -29,7 +29,7 @@
 | Lint | `ruff check backend`, `ruff format --check backend`, `git diff --check` | PASS |
 | Browser persistence | source audit; no Web Storage/IndexedDB/CacheStorage calls | PASS |
 | API cache | middleware and route audit | PASS |
-| Local API session | elevated integration test: no cookie `401`, evil Origin `403`, local bootstrap then conversation access `200` | PASS |
+| Local API session | elevated integration test: no cookie `401`, missing token `403`, evil Origin `403`, DPAPI-bound fragment bootstrap then conversation access `200` | PASS |
 | Offline / network policy | loopback and no-telemetry source tests | PASS (policy); full offline workstation run remains unverified |
 | Backend regression | full elevated Windows harness: `92 passed` | PASS |
 | Disk encryption | `manage-bde -status C:` denied by current non-admin execution context | UNKNOWN / hard gate not proven |
