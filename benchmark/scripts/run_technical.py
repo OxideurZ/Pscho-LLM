@@ -4,7 +4,10 @@
 import argparse
 import json
 import platform
+import shutil
+import subprocess
 import sys
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,6 +22,60 @@ from benchmark.scripts.context_factory import ContextScenario, build_context
 from scripts.verify_model import verify
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+class ResourceSampler:
+    def __init__(self, process: psutil.Process | None) -> None:
+        self.process = process
+        self.ram_peak_bytes = 0
+        self.llama_rss_peak_bytes = 0
+        self.vram_peak_mb: int | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._nvidia_smi = shutil.which("nvidia-smi")
+
+    def __enter__(self) -> "ResourceSampler":
+        self._sample()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=3)
+        self._sample()
+
+    def _run(self) -> None:
+        while not self._stop.wait(0.5):
+            self._sample()
+
+    def _sample(self) -> None:
+        self.ram_peak_bytes = max(self.ram_peak_bytes, psutil.virtual_memory().used)
+        if self.process is not None:
+            try:
+                self.llama_rss_peak_bytes = max(
+                    self.llama_rss_peak_bytes, self.process.memory_info().rss
+                )
+            except psutil.Error:
+                pass
+        if self._nvidia_smi:
+            try:
+                result = subprocess.run(
+                    [
+                        self._nvidia_smi,
+                        "--query-gpu=memory.used",
+                        "--format=csv,noheader,nounits",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+                used = max(int(line.strip()) for line in result.stdout.splitlines() if line.strip())
+                self.vram_peak_mb = max(self.vram_peak_mb or 0, used)
+            except (OSError, ValueError, subprocess.SubprocessError):
+                pass
 
 
 def parse_sse(body: str) -> list[tuple[str, dict[str, Any]]]:
@@ -99,13 +156,14 @@ def main() -> int:
                 mode = "cold" if repetition == 0 else "warm"
                 ram_before = psutil.virtual_memory().used
                 llama_rss_before = process.memory_info().rss if process else None
-                response = client.post(
-                    f"{args.api_url}/v1/chat",
-                    json={
-                        "messages": [{"role": "user", "content": context}],
-                        "generation": {"max_tokens": 800, "seed": 42},
-                    },
-                )
+                with ResourceSampler(process) as resources:
+                    response = client.post(
+                        f"{args.api_url}/v1/chat",
+                        json={
+                            "messages": [{"role": "user", "content": context}],
+                            "generation": {"max_tokens": 800, "seed": 42},
+                        },
+                    )
                 events = parse_sse(response.text)
                 metrics = next((data for event, data in events if event == "metrics"), {})
                 terminal = next(
@@ -123,6 +181,9 @@ def main() -> int:
                     "ram_used_after_bytes": psutil.virtual_memory().used,
                     "llama_rss_before_bytes": llama_rss_before,
                     "llama_rss_after_bytes": process.memory_info().rss if process else None,
+                    "ram_peak_bytes": resources.ram_peak_bytes,
+                    "llama_rss_peak_bytes": resources.llama_rss_peak_bytes or None,
+                    "vram_peak_mb": resources.vram_peak_mb,
                     "os": platform.platform(),
                     "hardware": platform.machine(),
                     "generation": {"max_tokens": 800, "seed": 42},
