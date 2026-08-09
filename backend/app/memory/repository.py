@@ -25,6 +25,10 @@ def normalize_level0(content: str) -> str:
     return " ".join(without_punctuation.split())
 
 
+def normalize_alias(alias: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", alias).casefold().split())
+
+
 @dataclass(frozen=True)
 class MemoryUserSource:
     id: str
@@ -239,7 +243,10 @@ class MemoryRepository:
                     now,
                 ),
             )
-        await self._consolidate_level0(connection, candidate_id, memory_identifier)
+        active_memory_id = await self._consolidate_level0(
+            connection, candidate_id, memory_identifier
+        )
+        await self._persist_entities(connection, active_memory_id, grounded_draft)
 
     @staticmethod
     async def _is_tombstoned(connection: aiosqlite.Connection, draft: MemoryCandidateDraft) -> bool:
@@ -283,7 +290,7 @@ class MemoryRepository:
     @staticmethod
     async def _consolidate_level0(
         connection: aiosqlite.Connection, candidate_id: str, memory_identifier: str
-    ) -> None:
+    ) -> str:
         connection.row_factory = aiosqlite.Row
         current = await (
             await connection.execute(
@@ -292,7 +299,7 @@ class MemoryRepository:
             )
         ).fetchone()
         if current is None:
-            return
+            return memory_identifier
         rows = await (
             await connection.execute(
                 """
@@ -314,7 +321,7 @@ class MemoryRepository:
                 "UPDATE memory_items SET status = 'active', updated_at = ? WHERE id = ?",
                 (now, memory_identifier),
             )
-            return
+            return memory_identifier
         source_rows = await (
             await connection.execute(
                 "SELECT * FROM memory_sources WHERE memory_id = ?", (memory_identifier,)
@@ -357,3 +364,47 @@ class MemoryRepository:
             "UPDATE memory_candidates SET accepted_memory_id = ? WHERE id = ?",
             (target["id"], candidate_id),
         )
+        return str(target["id"])
+
+    @staticmethod
+    async def _persist_entities(
+        connection: aiosqlite.Connection,
+        memory_identifier: str,
+        draft: MemoryCandidateDraft,
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
+        seen: set[tuple[str, str]] = set()
+        source_text = "\n".join(span.quote for span in draft.source_spans).casefold()
+        for entity in draft.entities:
+            normalized = normalize_alias(entity.mention)
+            key = (normalized, entity.entity_type)
+            if not normalized or key in seen or entity.mention.casefold() not in source_text:
+                continue
+            seen.add(key)
+            identifier = memory_id("entity")
+            await connection.execute(
+                """
+                INSERT INTO entities(
+                    id, display_name, entity_type, resolution_status, created_at, updated_at
+                ) VALUES (?, ?, ?, 'unresolved', ?, ?)
+                """,
+                (identifier, entity.mention, entity.entity_type, now, now),
+            )
+            await connection.execute(
+                """
+                INSERT INTO entity_aliases(id, entity_id, alias, normalized_alias, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (memory_id("alias"), identifier, entity.mention, normalized, now),
+            )
+            role = {
+                "place": "location",
+                "organization": "organization",
+            }.get(entity.entity_type, "related")
+            await connection.execute(
+                """
+                INSERT INTO memory_entities(memory_id, entity_id, role)
+                VALUES (?, ?, ?)
+                """,
+                (memory_identifier, identifier, role),
+            )

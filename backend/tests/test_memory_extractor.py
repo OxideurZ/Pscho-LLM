@@ -46,9 +46,10 @@ def metadata() -> dict[str, object]:
 
 
 class StructuredBackend(FakeBackend):
-    def __init__(self, quote: str) -> None:
+    def __init__(self, quote: str, entities: list[dict[str, str]] | None = None) -> None:
         super().__init__()
         self.quote = quote
+        self.entities = entities or []
         self.structured_requests = []
 
     async def generate_structured(  # type: ignore[no-untyped-def]
@@ -78,14 +79,16 @@ class StructuredBackend(FakeBackend):
                             "end_at": None,
                             "precision": None,
                         },
-                        "entities": [],
+                        "entities": self.entities,
                     }
                 ],
             }
         )
 
 
-async def queued_turn(path: Path) -> tuple[Database, dict[str, str]]:
+async def queued_turn(
+    path: Path, content: str = "Je préfère les réponses détaillées."
+) -> tuple[Database, dict[str, str]]:
     database = Database(path, REPOSITORY_ROOT / "migrations")
     await database.migrate()
     conversations = ConversationRepository(database)
@@ -101,7 +104,7 @@ async def queued_turn(path: Path) -> tuple[Database, dict[str, str]]:
     await conversations.begin_turn(
         conversation_id=conversation.id,
         client_turn_id=str(uuid4()),
-        content="Je préfère les réponses détaillées.",
+        content=content,
         input_type="text",
         ids=identifiers,
         run_metadata=metadata(),
@@ -266,3 +269,41 @@ async def test_exact_duplicate_merges_into_one_active_memory_with_two_sources(
 
     assert statuses == [("active", 1), ("merged", 1)]
     assert active_sources == (2,)
+
+
+@pytest.mark.asyncio
+async def test_grounded_entity_is_created_unresolved_without_name_based_resolution(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "app.sqlite"
+    source = "Mon amie Alex habite Genève."
+    database, _ids = await queued_turn(path, source)
+    backend = StructuredBackend(
+        source,
+        entities=[
+            {"mention": "Alex", "entity_type": "person"},
+            {"mention": "Genève", "entity_type": "place"},
+            {"mention": "Personne inventée", "entity_type": "person"},
+        ],
+    )
+
+    await run_extractor(database, backend, settings_for(path))
+
+    async with database.connect() as connection:
+        entities = await (
+            await connection.execute(
+                """
+                SELECT display_name, entity_type, resolution_status
+                FROM entities ORDER BY display_name
+                """
+            )
+        ).fetchall()
+        links = await (
+            await connection.execute("SELECT role, COUNT(*) FROM memory_entities GROUP BY role")
+        ).fetchall()
+
+    assert entities == [
+        ("Alex", "person", "unresolved"),
+        ("Genève", "place", "unresolved"),
+    ]
+    assert links == [("location", 1), ("related", 1)]
