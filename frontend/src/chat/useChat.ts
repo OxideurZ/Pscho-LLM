@@ -7,7 +7,9 @@ import {
   listConversations,
   loadConversationMessages,
   loadHealth,
+  loadRuntimeInfo,
   RunMetrics,
+  RuntimeInfo,
   streamConversationTurn,
   updateConversation,
 } from "../api/chat";
@@ -50,6 +52,8 @@ export function useChat() {
   const [draft, setDraft] = useState("");
   const [connectivity, setConnectivity] = useState<ConnectivityState>("reconnecting");
   const [engineAvailable, setEngineAvailable] = useState(false);
+  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(() => window.location.pathname === "/settings");
   const [listLoading, setListLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const controllers = useRef<Record<string, AbortController>>({});
@@ -90,6 +94,7 @@ export function useChat() {
       try {
         const health = await loadHealth();
         setEngineAvailable(health.llm.status === "ok" && health.llm.model_loaded);
+        void loadRuntimeInfo().then(setRuntimeInfo).catch(() => undefined);
         setConnectivity("connected");
         await refreshConversations();
         const id = selectedIdRef.current;
@@ -115,7 +120,10 @@ export function useChat() {
     };
     void initialLoad();
     const healthTimer = window.setInterval(() => { void reconcile(); }, 15_000);
-    const popState = () => { void selectConversation(routeConversationId(), false); };
+    const popState = () => {
+      setSettingsOpen(window.location.pathname === "/settings");
+      void selectConversation(routeConversationId(), false);
+    };
     window.addEventListener("popstate", popState);
     return () => {
       mounted = false;
@@ -127,6 +135,7 @@ export function useChat() {
   }, [reconcile]);
 
   const selectConversation = useCallback(async (id: string | null, push = true) => {
+    setSettingsOpen(false);
     setSelectedId(id);
     if (id) {
       localStorage.setItem("psych-local-conversation-id", id);
@@ -138,6 +147,12 @@ export function useChat() {
       window.history.pushState({}, "", "/");
     }
   }, [refreshMessages]);
+
+  const showSettings = useCallback(() => {
+    setSettingsOpen(true);
+    setSelectedId(null);
+    window.history.pushState({}, "", "/settings");
+  }, []);
 
   const newConversation = useCallback(async () => {
     try {
@@ -231,5 +246,6 @@ export function useChat() {
     conversations, archived, changeArchive, selectedId, selectConversation, newConversation, renameConversation, archiveConversation,
     messages, draft, setDraft, state: currentRuntime.state, runId: currentRuntime.runId, metrics: currentRuntime.metrics,
     error: currentRuntime.error, connectivity, engineAvailable, listLoading, messagesLoading, submit, stop, retry: reconcile,
-  }), [archiveConversation, archived, changeArchive, connectivity, conversations, currentRuntime, draft, engineAvailable, listLoading, messages, messagesLoading, newConversation, reconcile, renameConversation, selectConversation, selectedId, stop, submit]);
+    settingsOpen, showSettings, runtimeInfo,
+  }), [archiveConversation, archived, changeArchive, connectivity, conversations, currentRuntime, draft, engineAvailable, listLoading, messages, messagesLoading, newConversation, reconcile, renameConversation, selectConversation, selectedId, settingsOpen, showSettings, stop, submit, runtimeInfo]);
 }

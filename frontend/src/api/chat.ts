@@ -25,6 +25,13 @@ export interface HealthSnapshot {
   llm: { status: "ok" | "degraded" | "unavailable"; model_loaded: boolean };
 }
 
+export interface RuntimeInfo {
+  runtime: { os: string; python: string };
+  model: { name: string; sha256: string; context_size: number; llama_cpp_version: string };
+  data_directory: string;
+  frontend_serving_mode: string;
+}
+
 export interface RunMetrics {
   ttft_ms: number | null;
   input_tokens: number | null;
@@ -74,6 +81,7 @@ export async function updateConversation(
 }
 
 export const loadHealth = () => requestJson<HealthSnapshot>("/v1/health");
+export const loadRuntimeInfo = () => requestJson<RuntimeInfo>("/v1/runtime-info");
 
 export async function loadConversationMessages(conversationId: string): Promise<ChatMessage[]> {
   const body = await requestJson<{ items: ChatMessage[] }>(

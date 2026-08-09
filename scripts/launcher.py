@@ -125,12 +125,14 @@ class Launcher:
         if instance is None:
             return False
         backend_url = local_url(self.settings.psych_local_host, instance.backend_port, "/v1/health")
+        llama_url = f"http://{self.settings.psych_local_host}:{instance.llama_port}/health"
         valid = (
             instance.backend_port == self.backend_port
             and instance.llama_port == self.llama_port
             and pid_alive(instance.backend_pid)
             and pid_alive(instance.llama_pid)
             and reachable(backend_url)
+            and reachable(llama_url)
         )
         if not valid:
             self.log("instance_state=stale")

@@ -51,7 +51,7 @@ export function ChatApp() {
             />
           ))}
         </nav>
-        <button className="settings-link" type="button" onClick={() => window.history.pushState({}, "", "/settings")}>⚙ Réglages</button>
+        <button className="settings-link" type="button" onClick={chat.showSettings}>⚙ Réglages</button>
       </aside>
 
       <section className="chat-pane">
@@ -62,6 +62,7 @@ export function ChatApp() {
           </div>
         )}
         {chat.connectivity === "connected" && !chat.engineAvailable && <div className="engine-warning" role="status">Le moteur local n’est pas disponible. L’historique reste accessible.</div>}
+        {chat.settingsOpen ? <SettingsPanel runtimeInfo={chat.runtimeInfo} engineAvailable={chat.engineAvailable} connectivity={chat.connectivity} /> : <>
         <header className="chat-header">
           <div><p className="eyebrow">Discussion</p><h1>{chat.selectedId ? titleFor(chat.conversations.find((item) => item.id === chat.selectedId) ?? { title: null } as ConversationRecord) : "Bienvenue"}</h1></div>
           {chat.selectedId && <span className={`status status-${chat.state}`}><i />{stateLabels[chat.state]}</span>}
@@ -90,10 +91,26 @@ export function ChatApp() {
           <button type="submit" disabled={!chat.selectedId || busy || !chat.draft.trim() || !chat.engineAvailable || chat.connectivity !== "connected"} aria-label="Envoyer">↑</button>
         </form>
         <footer>Persisté localement · Données non sensibles uniquement avant la milestone sécurité</footer>
+        </>}
       </section>
     </main>
   );
 }
+
+function SettingsPanel({ runtimeInfo, engineAvailable, connectivity }: { runtimeInfo: ReturnType<typeof useChat>["runtimeInfo"]; engineAvailable: boolean; connectivity: string }) {
+  return <section className="settings-panel"><header className="chat-header"><div><p className="eyebrow">Réglages</p><h1>État local</h1></div></header><div className="settings-grid">
+    <Info label="Backend" value={connectivity === "connected" ? "Connecté" : connectivity === "reconnecting" ? "Reconnexion" : "Indisponible"} />
+    <Info label="Moteur LLM" value={engineAvailable ? "Disponible" : "Dégradé"} />
+    <Info label="Modèle" value={runtimeInfo?.model.name ?? "Chargement…"} />
+    <Info label="SHA modèle" value={runtimeInfo ? `${runtimeInfo.model.sha256.slice(0, 12)}…` : "—"} />
+    <Info label="llama.cpp" value={runtimeInfo?.model.llama_cpp_version ?? "—"} />
+    <Info label="Contexte" value={runtimeInfo ? `${runtimeInfo.model.context_size} tokens` : "—"} />
+    <Info label="Données locales" value={runtimeInfo?.data_directory ?? "—"} />
+    <Info label="Interface" value={runtimeInfo?.frontend_serving_mode ?? "—"} />
+  </div><p className="settings-note">Ce panneau n’affiche aucun contenu de conversation. Les réglages avancés restent hors scope de cette milestone.</p></section>;
+}
+
+function Info({ label, value }: { label: string; value: string }) { return <div className="info-row"><span>{label}</span><strong title={value}>{value}</strong></div>; }
 
 function EmptyWelcome({ onCreate }: { onCreate: () => void }) {
   return <div className="empty"><p className="eyebrow">Psych-local</p><h2>Vos conversations, sur cette machine.</h2><p>Créez une discussion pour commencer. Pendant cette phase, utilisez uniquement des données artificielles ou non sensibles.</p><button type="button" className="new-conversation welcome-action" onClick={onCreate}>Nouvelle conversation</button></div>;

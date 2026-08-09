@@ -9,6 +9,7 @@ from backend.app.api.schemas import (
     ConversationUpdateRequest,
     TurnRequest,
 )
+from backend.app.config.metadata import runtime_info
 from backend.app.conversations import (
     ConversationBusyError,
     ConversationDeletedError,
@@ -62,6 +63,22 @@ async def health(request: Request) -> dict[str, Any]:
 async def models(request: Request) -> dict[str, Any]:
     model = await request.app.state.llm_backend.model_info()
     return {"models": [model.model_dump(mode="json")]}
+
+
+@router.get("/runtime-info")
+async def runtime_information(request: Request) -> dict[str, Any]:
+    settings = request.app.state.settings
+    return {
+        "runtime": runtime_info(settings),
+        "model": {
+            "name": settings.model_name,
+            "sha256": settings.model_expected_sha256,
+            "context_size": settings.context_size,
+            "llama_cpp_version": settings.llama_cpp_version,
+        },
+        "data_directory": str(settings.data_directory),
+        "frontend_serving_mode": "fastapi-static",
+    }
 
 
 @router.post("/conversations", status_code=201)

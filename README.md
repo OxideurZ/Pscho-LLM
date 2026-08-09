@@ -1,5 +1,22 @@
 # Psych-local
 
+## Windows Quick Start
+
+Après avoir installé les prérequis documentés plus bas et placé le `llama-server` et le GGUF
+validé à leurs emplacements configurés :
+
+```powershell
+git clone git@github.com:OxideurZ/Pscho-LLM.git
+cd Pscho-LLM
+.\setup.ps1
+.\start.ps1
+```
+
+`start.ps1` vérifie la configuration, l’intégrité du modèle, les ports et une éventuelle instance
+déjà saine. Il démarre uniquement `llama-server` et FastAPI, attend leurs health checks puis ouvre
+`http://127.0.0.1:8000`. Pour l’arrêter, utiliser `.\stop.ps1`. Aucun serveur Vite/Node n’est requis
+au runtime quotidien : FastAPI sert le build frontend.
+
 Psych-local est un environnement local de recherche conversationnelle. La Milestone B ajoute à la
 tranche locale validée en A une histoire durable : **PERSIST · ORDER · RETRY · CHECKPOINT ·
 RECONCILE · RESUME · MIGRATE · BACKUP**.
@@ -108,7 +125,7 @@ llama-server -m models/Qwen3.6-35B-A3B-Q4_K_M.gguf --alias Qwen3.6-35B-A3B-Q4_K_
 Valider `/health`, `/v1/models` et `/v1/chat/completions` directement sur le moteur avant de tester
 Psych-local. La gestion automatique de ce processus est volontairement hors périmètre A.
 
-## Démarrer Psych-local
+## Démarrer manuellement (développement)
 
 Appliquer les migrations et lancer l’API :
 
@@ -142,6 +159,25 @@ POST   /v1/conversations/{id}/turns
 
 `/v1/health` reste disponible et passe à `degraded` si `llama-server` s’arrête. Son redémarrage est
 détecté sans redémarrer FastAPI.
+
+## Runtime C et diagnostic
+
+La configuration suit : valeurs par défaut, `.env` local (ignoré par Git), puis variables
+d’environnement. `setup.ps1` est idempotent ; il crée/répare l’environnement Python, installe les
+dépendances, construit le frontend et applique les migrations. Il ne télécharge ni llama.cpp ni un
+modèle. Un modèle absent ou dont le SHA ne correspond pas bloque le lancement avec l’emplacement,
+le nom et le SHA attendus.
+
+Les données runtime sont hors dépôt, par défaut sous `%LOCALAPPDATA%\PsychLocal\` : base SQLite,
+backups et `runtime\instance.json`. Ce fichier est validé par PID, ports et health endpoint avant
+d’être cru ; un fichier stale est supprimé automatiquement. Le launcher ne tue jamais de processus
+tiers. Ses logs ne contiennent que des événements de lifecycle, jamais de contenu conversationnel.
+
+Pour la validation logicielle sans benchmark matériel :
+
+```powershell
+.\scripts\check.ps1
+```
 
 ## Persistance et recovery
 
