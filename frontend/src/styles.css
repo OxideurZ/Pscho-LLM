@@ -35,4 +35,13 @@ button { cursor: pointer; }
 .voice-permission { display: flex; align-items: center; gap: 11px; margin: 8px 0 10px; padding: 14px; border: 1px solid #496a53; border-radius: 14px; color: #bdc9bf; background: linear-gradient(120deg, #19221c, #151b17); box-shadow: 0 12px 32px #0003; }.voice-permission div { display: grid; gap: 2px; }.voice-permission strong { color: #edf4ee; font-size: .84rem; }.voice-permission small { color: #9aa89e; font-size: .72rem; }.voice-permission .voice-secondary { margin-left: auto; flex: 0 0 auto; }.voice-wave i { height: 12px; }.voice-signal { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 20px; margin: -4px 0 10px; color: #9ca9a0; font-size: .72rem; }.voice-signal > span { width: 7px; height: 7px; border-radius: 50%; background: #829087; }.voice-signal-active { color: #b9dfc0; }.voice-signal-active > span { background: #7fd091; box-shadow: 0 0 0 4px #7fd0911f; }.voice-signal-silent { color: #e5c58e; }.voice-signal-silent > span { background: #d9aa5f; }.voice-signal-muted { color: #edaaa2; }.voice-signal-muted > span { background: #e27f74; }
 @keyframes recording-pulse { 70% { box-shadow: 0 0 0 8px #ef807600; } 100% { box-shadow: 0 0 0 0 #ef807600; } } @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .42; } }
+
+/* Keep the composer usable when the viewport or draft is narrow. */
+.composer textarea { min-width: 0; overflow-y: auto; }
+.composer > button { flex: 0 0 auto; }
+@media (max-width: 480px) {
+  .composer { align-items: flex-end; padding-left: 12px; }
+  .composer textarea { font-size: .92rem; }
+  .composer > button { min-width: 44px; padding: 0 11px; }
+}
 @media (max-width: 720px) { .app-shell { grid-template-columns: 1fr; }.sidebar { min-height: unset; height: auto; padding: 12px; border-right: 0; border-bottom: 1px solid #29302b; }.conversation-list { display: flex; overflow-x: auto; }.conversation-item { min-width: 150px; }.conversation-heading, .settings-link { display: none; }.chat-pane { height: calc(100vh - 143px); }.brand { padding-bottom: 10px; }.new-conversation { margin-left: auto; }.sidebar { flex-direction: row; align-items: center; gap: 10px; }.brand { margin-right: auto; }.chat-header { min-height: 72px; } }
