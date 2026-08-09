@@ -30,6 +30,7 @@
 | Browser persistence | source audit; no Web Storage/IndexedDB/CacheStorage calls | PASS |
 | API cache | middleware and route audit | PASS |
 | Local API session | elevated integration test: no cookie `401`, evil Origin `403`, local bootstrap then conversation access `200` | PASS |
+| Offline / network policy | loopback and no-telemetry source tests | PASS (policy); full offline workstation run remains unverified |
 | Disk encryption | `manage-bde -status C:` denied by current non-admin execution context | UNKNOWN / hard gate not proven |
 | Data-directory ACL | default `%LOCALAPPDATA%\\PsychLocal` ACL is owner/System/Administrators only; repository test directory is intentionally not the production data directory | PASS for default path; repository path not a readiness target |
 | Other Windows account | not executed from a second standard account | UNVERIFIED |
