@@ -208,15 +208,21 @@ export function useChat() {
     });
   }, []);
 
-  const submit = useCallback(async (event?: FormEvent) => {
+  const submit = useCallback(async (
+    event?: FormEvent,
+    suppliedContent?: string,
+    inputType: "text" | "voice" = "text",
+    suppliedClientTurnId?: string,
+    suppliedConversationId?: string,
+  ) => {
     event?.preventDefault();
-    const content = draft.trim();
-    const id = selectedIdRef.current;
+    const content = (suppliedContent ?? draft).trim();
+    const id = suppliedConversationId ?? selectedIdRef.current;
     if (!content || !id || busyStates.includes(currentRuntime.state) || !engineAvailable) return;
-    const clientTurnId = crypto.randomUUID();
+    const clientTurnId = suppliedClientTurnId ?? crypto.randomUUID();
     const abortController = new AbortController();
     controllers.current[id] = abortController;
-    setDraft("");
+    if (suppliedContent === undefined) setDraft("");
     setRuntime(id, { state: "submitting", error: null, metrics: null, runId: null });
     setMessageCache((current) => ({ ...current, [id]: [
       ...(current[id] ?? []),
@@ -231,7 +237,7 @@ export function useChat() {
         onDone: () => { setRuntime(id, { state: "complete", runId: null }); void refreshMessages(id); void refreshConversations(); },
         onCancelled: () => { setRuntime(id, { state: "cancelled", runId: null }); void refreshMessages(id); },
         onError: (code) => { setRuntime(id, { state: "error", runId: null, error: userMessageForError(code) }); void refreshMessages(id); },
-      });
+      }, inputType);
     } catch (error) {
       if ((error as Error).name === "AbortError") return;
       const code = error instanceof ApiError ? error.code : "BACKEND_UNAVAILABLE";
@@ -243,6 +249,13 @@ export function useChat() {
     }
   }, [appendDelta, currentRuntime.state, draft, engineAvailable, refreshConversations, refreshMessages, setRuntime]);
 
+  const submitVoice = useCallback(
+    async (content: string, clientTurnId: string, conversationId: string) => {
+      await submit(undefined, content, "voice", clientTurnId, conversationId);
+    },
+    [submit],
+  );
+
   const stop = useCallback(async () => {
     const id = selectedIdRef.current;
     if (!id || !currentRuntime.runId) return;
@@ -253,7 +266,7 @@ export function useChat() {
   return useMemo(() => ({
     conversations, archived, changeArchive, selectedId, selectConversation, newConversation, renameConversation, archiveConversation,
     messages, draft, setDraft, state: currentRuntime.state, runId: currentRuntime.runId, metrics: currentRuntime.metrics,
-    error: currentRuntime.error, connectivity, engineAvailable, listLoading, messagesLoading, submit, stop, retry: reconcile,
+    error: currentRuntime.error, connectivity, engineAvailable, listLoading, messagesLoading, submit, submitVoice, stop, retry: reconcile,
     settingsOpen, showSettings, runtimeInfo,
-  }), [archiveConversation, archived, changeArchive, connectivity, conversations, currentRuntime, draft, engineAvailable, listLoading, messages, messagesLoading, newConversation, reconcile, renameConversation, selectConversation, selectedId, settingsOpen, showSettings, stop, submit, runtimeInfo]);
+  }), [archiveConversation, archived, changeArchive, connectivity, conversations, currentRuntime, draft, engineAvailable, listLoading, messages, messagesLoading, newConversation, reconcile, renameConversation, selectConversation, selectedId, settingsOpen, showSettings, stop, submit, submitVoice, runtimeInfo]);
 }

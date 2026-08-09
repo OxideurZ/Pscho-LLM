@@ -54,6 +54,18 @@ export interface ChatHandlers {
   onError: (code: string, retryable: boolean) => void;
 }
 
+export type VoiceJobStatus = "recording" | "transcribing" | "transcript_ready" | "cancel_requested" | "cancelled" | "failed";
+
+export interface VoiceJob {
+  voice_input_id: string;
+  conversation_id: string;
+  client_turn_id: string;
+  status: VoiceJobStatus;
+  duration_ms: number | null;
+  transcript?: string | null;
+  error_code: string | null;
+}
+
 export async function createConversation(): Promise<ConversationRecord> {
   return requestJson<ConversationRecord>("/v1/conversations", {
     method: "POST",
@@ -96,6 +108,7 @@ export async function streamConversationTurn(
   content: string,
   signal: AbortSignal,
   handlers: ChatHandlers,
+  inputType: "text" | "voice" = "text",
 ): Promise<void> {
   const response = await fetch(
     `/v1/conversations/${encodeURIComponent(conversationId)}/turns`,
@@ -105,7 +118,7 @@ export async function streamConversationTurn(
     body: JSON.stringify({
       client_turn_id: clientTurnId,
       content,
-      input_type: "text",
+      input_type: inputType,
       generation: { max_tokens: 800 },
     }),
     signal,
@@ -149,4 +162,39 @@ export async function cancelRun(runId: string): Promise<void> {
     method: "POST",
   });
   if (!response.ok && response.status !== 409) throw new Error("CANCEL_FAILED");
+}
+
+export async function createVoiceJob(
+  voiceInputId: string,
+  conversationId: string,
+  clientTurnId: string,
+): Promise<VoiceJob> {
+  return requestJson<VoiceJob>("/v1/stt/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      voice_input_id: voiceInputId,
+      conversation_id: conversationId,
+      client_turn_id: clientTurnId,
+    }),
+  });
+}
+
+export async function appendVoiceChunk(voiceInputId: string, audio: Blob): Promise<void> {
+  const response = await fetch(`/v1/stt/jobs/${encodeURIComponent(voiceInputId)}/chunks`, {
+    method: "POST",
+    headers: { "Content-Type": "audio/wav", "Content-Length": String(audio.size) },
+    body: audio,
+  });
+  if (!response.ok) throw new ApiError(`HTTP_${response.status}`, response.status >= 500, response.status);
+}
+
+export async function finalizeVoiceJob(voiceInputId: string): Promise<VoiceJob> {
+  return requestJson<VoiceJob>(`/v1/stt/jobs/${encodeURIComponent(voiceInputId)}/finalize`, { method: "POST" });
+}
+
+export const loadVoiceJob = (voiceInputId: string) => requestJson<VoiceJob>(`/v1/stt/jobs/${encodeURIComponent(voiceInputId)}`);
+
+export async function cancelVoiceJob(voiceInputId: string): Promise<VoiceJob> {
+  return requestJson<VoiceJob>(`/v1/stt/jobs/${encodeURIComponent(voiceInputId)}/cancel`, { method: "POST" });
 }

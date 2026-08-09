@@ -123,11 +123,14 @@ async def stt_model(request: Request) -> dict[str, Any]:
 @router.post("/stt/jobs", status_code=201)
 async def create_voice_job(payload: VoiceJobCreateRequest, request: Request) -> JSONResponse:
     try:
+        await request.app.state.conversation_repository.get(payload.conversation_id)
         job = await request.app.state.voice_job_registry.create(
             payload.voice_input_id, payload.conversation_id, payload.client_turn_id
         )
     except (VoiceJobConflictError, ValueError) as error:
         return voice_error(error)
+    except (ConversationNotFoundError, ConversationDeletedError) as error:
+        return conversation_error(error)
     return JSONResponse(voice_job_payload(job), status_code=201)
 
 

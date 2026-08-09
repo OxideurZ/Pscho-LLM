@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { ConversationRecord } from "../api/chat";
 import { useChat } from "../chat/useChat";
+import { useVoiceRecorder } from "../voice/useVoiceRecorder";
 
 const stateLabels = {
   idle: "Prêt",
@@ -21,6 +22,9 @@ export function ChatApp() {
   const end = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLElement>(null);
   const busy = ["submitting", "preparing", "generating"].includes(chat.state);
+  const voice = useVoiceRecorder(
+    async (text, binding) => chat.submitVoice(text, binding.clientTurnId, binding.conversationId),
+  );
   const canFollow = () => {
     const node = scroller.current;
     return !node || node.scrollHeight - node.scrollTop - node.clientHeight < 96;
@@ -90,11 +94,23 @@ export function ChatApp() {
           <textarea aria-label="Message" placeholder={chat.selectedId ? "Écrire un message…" : "Créez une conversation pour commencer"} value={chat.draft} onChange={(event) => chat.setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void chat.submit(); } }} disabled={!chat.selectedId || busy || !chat.engineAvailable || chat.connectivity !== "connected"} rows={2} />
           <button type="submit" disabled={!chat.selectedId || busy || !chat.draft.trim() || !chat.engineAvailable || chat.connectivity !== "connected"} aria-label="Envoyer">↑</button>
         </form>
+        <VoiceControls
+          enabled={Boolean(chat.selectedId && chat.engineAvailable && chat.connectivity === "connected" && !busy)}
+          selectedId={chat.selectedId}
+          voice={voice}
+        />
         <footer>Persisté localement · Données non sensibles uniquement avant la milestone sécurité</footer>
         </>}
       </section>
     </main>
   );
+}
+
+function VoiceControls({ enabled, selectedId, voice }: { enabled: boolean; selectedId: string | null; voice: ReturnType<typeof useVoiceRecorder> }) {
+  if (voice.state === "transcript_ready") return <section className="voice-preview" aria-label="Aperçu de la dictée"><label htmlFor="voice-preview">Transcription avant envoi</label><textarea id="voice-preview" value={voice.preview} onChange={(event) => voice.setPreview(event.target.value)} rows={3} /><span><button type="button" onClick={() => void voice.send()}>Envoyer la dictée</button><button type="button" onClick={() => void voice.cancel()}>Annuler</button></span></section>;
+  if (voice.state === "recording") return <section className="voice-controls" aria-live="polite"><span>Enregistrement en cours (maximum 15 min)</span><button type="button" onClick={() => void voice.stop()}>Stop</button><button type="button" onClick={() => void voice.cancel()}>Annuler</button></section>;
+  if (voice.state === "transcribing" || voice.state === "cancel_requested") return <section className="voice-controls" aria-live="polite"><span>{voice.state === "cancel_requested" ? "Annulation de la transcription…" : "Transcription locale en cours…"}</span><button type="button" onClick={() => void voice.cancel()}>Annuler</button></section>;
+  return <section className="voice-controls"><button type="button" disabled={!enabled || !selectedId} onClick={() => selectedId && void voice.start(selectedId)}>🎙 Dicter</button>{voice.error && <span className="error" role="alert">La dictée n’a pas pu être traitée. Vous pouvez recommencer.</span>}</section>;
 }
 
 function SettingsPanel({ runtimeInfo, engineAvailable, connectivity }: { runtimeInfo: ReturnType<typeof useChat>["runtimeInfo"]; engineAvailable: boolean; connectivity: string }) {
