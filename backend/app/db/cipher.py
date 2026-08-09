@@ -18,6 +18,14 @@ class CipherCursor:
     def __init__(self, cursor: Any) -> None:
         self._cursor = cursor
 
+    @property
+    def rowcount(self) -> int:
+        return int(self._cursor.rowcount)
+
+    @property
+    def lastrowid(self) -> int | None:
+        return self._cursor.lastrowid
+
     async def fetchone(self) -> Any:
         return await asyncio.to_thread(self._cursor.fetchone)
 

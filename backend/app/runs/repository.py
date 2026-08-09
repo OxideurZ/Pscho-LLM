@@ -10,9 +10,15 @@ from backend.app.runs.models import ActiveRun, RunStatus
 
 
 class RunRepository:
-    def __init__(self, database_path: Path, busy_timeout_ms: int = 30_000) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        busy_timeout_ms: int = 30_000,
+        encryption_key: bytes | None = None,
+    ) -> None:
         self.database_path = database_path
         self.busy_timeout_ms = busy_timeout_ms
+        self.encryption_key = encryption_key
 
     async def create(
         self,
@@ -54,7 +60,9 @@ class RunRepository:
             context_size,
             run.started_at.isoformat(),
         )
-        async with sqlite_connection(self.database_path, self.busy_timeout_ms) as connection:
+        async with sqlite_connection(
+            self.database_path, self.busy_timeout_ms, self.encryption_key
+        ) as connection:
             await connection.execute(
                 """
                 INSERT INTO model_runs (
@@ -72,7 +80,9 @@ class RunRepository:
         self, run_id: str, status: RunStatus, error_code: str | None = None
     ) -> None:
         completed_at = datetime.now(UTC).isoformat() if status.terminal else None
-        async with sqlite_connection(self.database_path, self.busy_timeout_ms) as connection:
+        async with sqlite_connection(
+            self.database_path, self.busy_timeout_ms, self.encryption_key
+        ) as connection:
             await connection.execute(
                 "UPDATE model_runs SET status = ?, completed_at = ?, error_code = ? WHERE id = ?",
                 (status.value, completed_at, error_code, run_id),
@@ -82,7 +92,9 @@ class RunRepository:
     async def update_metrics(
         self, run_id: str, metrics: dict[str, int | float | str | bool | None]
     ) -> None:
-        async with sqlite_connection(self.database_path, self.busy_timeout_ms) as connection:
+        async with sqlite_connection(
+            self.database_path, self.busy_timeout_ms, self.encryption_key
+        ) as connection:
             await connection.execute(
                 """
                 UPDATE model_runs SET
@@ -104,7 +116,9 @@ class RunRepository:
             await connection.commit()
 
     async def get(self, run_id: str) -> dict[str, Any] | None:
-        async with sqlite_connection(self.database_path, self.busy_timeout_ms) as connection:
+        async with sqlite_connection(
+            self.database_path, self.busy_timeout_ms, self.encryption_key
+        ) as connection:
             connection.row_factory = aiosqlite.Row
             cursor = await connection.execute("SELECT * FROM model_runs WHERE id = ?", (run_id,))
             row = await cursor.fetchone()

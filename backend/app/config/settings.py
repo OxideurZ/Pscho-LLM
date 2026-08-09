@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     whisper_model_expected_sha256: str = (
         "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69"
     )
+    security_enabled: bool = False
+    database_key_name: str = "database-encryption"
+    local_access_secret_name: str = "local-access"
 
 
 @lru_cache

@@ -18,6 +18,7 @@ from backend.app.llm.base import LLMBackend
 from backend.app.llm.llama_cpp import LlamaCppBackend
 from backend.app.runs import RunRegistry, RunRepository
 from backend.app.runtime import RuntimeOffloadService
+from backend.app.security import SecretStore, WindowsDpapiSecretStore
 from backend.app.stt import VoiceJobRegistry, WhisperCppBackend
 from backend.app.summaries import SummaryService
 
@@ -30,10 +31,16 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
     async def lifespan(app: FastAPI):
         for directory in ("data", "backups", "models", "runtime", "logs"):
             (resolved_settings.data_directory / directory).mkdir(parents=True, exist_ok=True)
+        secret_store: SecretStore | None = None
+        database_key: bytes | None = None
+        if resolved_settings.security_enabled:
+            secret_store = WindowsDpapiSecretStore(resolved_settings.data_directory / "security")
+            database_key = secret_store.create(resolved_settings.database_key_name)
         database = Database(
             resolved_settings.database_path,
             REPOSITORY_ROOT / "migrations",
             resolved_settings.sqlite_busy_timeout_ms,
+            database_key,
         )
         await database.migrate()
         conversation_repository = ConversationRepository(
@@ -43,7 +50,9 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         database.mark_reconciliation_completed()
         registry = RunRegistry()
         run_repository = RunRepository(
-            resolved_settings.database_path, resolved_settings.sqlite_busy_timeout_ms
+            resolved_settings.database_path,
+            resolved_settings.sqlite_busy_timeout_ms,
+            database_key,
         )
         summary_service = SummaryService(
             resolved_settings,
@@ -54,6 +63,7 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         )
         context_builder = ContextBuilder(conversation_repository, summary_service)
         app.state.settings = resolved_settings
+        app.state.secret_store = secret_store
         app.state.database = database
         app.state.llm_backend = resolved_backend
         app.state.stt_backend = WhisperCppBackend(

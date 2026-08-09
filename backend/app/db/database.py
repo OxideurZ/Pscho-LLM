@@ -8,6 +8,8 @@ from pathlib import Path
 
 import aiosqlite
 
+from backend.app.db.cipher import sqlcipher_connection
+
 MIGRATION_PATTERN = re.compile(r"^(?P<version>\d{3,4})_(?P<name>[a-z0-9_]+)\.sql$")
 
 
@@ -49,8 +51,12 @@ class DatabaseStatus:
 
 @asynccontextmanager
 async def sqlite_connection(
-    path: Path, busy_timeout_ms: int = 30_000
+    path: Path, busy_timeout_ms: int = 30_000, encryption_key: bytes | None = None
 ) -> AsyncIterator[aiosqlite.Connection]:
+    if encryption_key is not None:
+        async with sqlcipher_connection(path, encryption_key, busy_timeout_ms) as connection:
+            yield connection  # type: ignore[misc]
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = await aiosqlite.connect(path, timeout=busy_timeout_ms / 1000)
     try:
@@ -74,10 +80,17 @@ async def sqlite_connection(
 
 
 class Database:
-    def __init__(self, path: Path, migrations_dir: Path, busy_timeout_ms: int = 30_000) -> None:
+    def __init__(
+        self,
+        path: Path,
+        migrations_dir: Path,
+        busy_timeout_ms: int = 30_000,
+        encryption_key: bytes | None = None,
+    ) -> None:
         self.path = path
         self.migrations_dir = migrations_dir
         self.busy_timeout_ms = busy_timeout_ms
+        self.encryption_key = encryption_key
         self.migration_status = "not_started"
         self.schema_version: int | None = None
         self.expected_schema_version: int | None = None
@@ -85,7 +98,9 @@ class Database:
 
     @asynccontextmanager
     async def connect(self) -> AsyncIterator[aiosqlite.Connection]:
-        async with sqlite_connection(self.path, self.busy_timeout_ms) as connection:
+        async with sqlite_connection(
+            self.path, self.busy_timeout_ms, self.encryption_key
+        ) as connection:
             yield connection
 
     def _discover_migrations(self) -> list[Migration]:
