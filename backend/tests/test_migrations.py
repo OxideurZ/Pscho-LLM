@@ -24,8 +24,8 @@ async def test_fresh_database_applies_ordered_checksumed_migrations(tmp_path: Pa
 
     assert status.reachable is True
     assert status.schema_current is True
-    assert status.schema_version == 7
-    assert status.expected_schema_version == 7
+    assert status.schema_version == 8
+    assert status.expected_schema_version == 8
     assert status.foreign_keys is True
     assert status.journal_mode == "wal"
     assert status.busy_timeout_ms == 30_000
@@ -45,6 +45,7 @@ async def test_fresh_database_applies_ordered_checksumed_migrations(tmp_path: Pa
         (5, "model_run_kind", 64),
         (6, "summaries", 64),
         (7, "summary_sources", 64),
+        (8, "jobs", 64),
     ]
 
 
@@ -113,7 +114,7 @@ async def test_changed_applied_migration_checksum_refuses_startup(tmp_path: Path
 @pytest.mark.asyncio
 async def test_invalid_or_failed_migration_never_reports_current(tmp_path: Path) -> None:
     invalid_order = copy_migrations(tmp_path / "invalid-order")
-    (invalid_order / "009_gap.sql").write_text("SELECT 1;\n", encoding="utf-8")
+    (invalid_order / "010_gap.sql").write_text("SELECT 1;\n", encoding="utf-8")
     with pytest.raises(SchemaVersionError, match="contiguous"):
         await Database(tmp_path / "order.sqlite", invalid_order).migrate()
 

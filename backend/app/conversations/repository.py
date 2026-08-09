@@ -411,6 +411,7 @@ class ConversationRepository:
         input_type: str,
         ids: dict[str, str],
         run_metadata: dict[str, Any],
+        memory_job: dict[str, Any] | None = None,
     ) -> Turn:
         now_dt = datetime.now(UTC)
         now = now_dt.isoformat()
@@ -477,6 +478,28 @@ class ConversationRepository:
                     ),
                 )
                 await self._insert_model_run(connection, ids["run_id"], run_metadata, now)
+                if memory_job is not None:
+                    await connection.execute(
+                        """
+                        INSERT INTO jobs(
+                            id, kind, status, priority, dedupe_key, source_message_id,
+                            blocked_by_run_id, attempts, max_attempts, available_at,
+                            created_at, updated_at
+                        ) VALUES (?, 'memory_extract', 'pending', ?, ?, ?, ?, 0, ?, ?, ?, ?)
+                        ON CONFLICT(dedupe_key) DO NOTHING
+                        """,
+                        (
+                            memory_job["id"],
+                            memory_job["priority"],
+                            memory_job["dedupe_key"],
+                            ids["user_message_id"],
+                            ids["run_id"],
+                            memory_job["max_attempts"],
+                            now,
+                            now,
+                            now,
+                        ),
+                    )
                 await connection.execute(
                     """
                     INSERT INTO messages(

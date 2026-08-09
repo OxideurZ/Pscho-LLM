@@ -57,13 +57,27 @@ class ConversationChatService:
             "assistant_message_id": new_id("msg"),
             "session_id": new_id("session"),
             "run_id": new_id("run"),
+            "memory_job_id": new_id("job"),
         }
+        memory_job = None
+        if self.settings.memory_enabled:
+            memory_job = {
+                "id": ids["memory_job_id"],
+                "priority": 0,
+                "dedupe_key": (
+                    "memory_extract:"
+                    f"{self.settings.memory_extraction_prompt_version}:"
+                    f"{ids['user_message_id']}"
+                ),
+                "max_attempts": self.settings.memory_job_max_attempts,
+            }
         turn = await self.repository.begin_turn(
             conversation_id=conversation_id,
             client_turn_id=client_turn_id,
             content=content,
             input_type=input_type,
             ids=ids,
+            memory_job=memory_job,
             run_metadata={
                 "model_name": self.settings.model_name,
                 "model_sha256": self.settings.model_expected_sha256,

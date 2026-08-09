@@ -16,6 +16,7 @@ from backend.app.conversations.repository import ConversationRepository
 from backend.app.conversations.service import ConversationChatService
 from backend.app.db import Database
 from backend.app.db.migration import EncryptedDatabaseMigrator
+from backend.app.jobs import JobRepository
 from backend.app.llm.base import LLMBackend
 from backend.app.llm.llama_cpp import LlamaCppBackend
 from backend.app.runs import RunRegistry, RunRepository
@@ -56,6 +57,8 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             database, resolved_settings.session_timeout_seconds
         )
         await conversation_repository.reconcile_interrupted_process()
+        job_repository = JobRepository(database)
+        await job_repository.recover_interrupted()
         database.mark_reconciliation_completed()
         registry = RunRegistry()
         run_repository = RunRepository(
@@ -91,6 +94,7 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             resolved_settings.backup_retention_count,
         )
         app.state.conversation_repository = conversation_repository
+        app.state.job_repository = job_repository
         app.state.conversation_chat_service = ConversationChatService(
             resolved_settings,
             resolved_backend,

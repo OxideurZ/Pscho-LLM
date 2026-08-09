@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     summary_prompt_version: str = "0.1.1"
     memory_extraction_prompt_id: str = "memory_extraction"
     memory_extraction_prompt_version: str = "0.1.2"
+    memory_enabled: bool = True
+    memory_background_idle_seconds: int = Field(default=120, ge=1)
+    memory_job_max_attempts: int = Field(default=3, ge=1, le=10)
+    memory_previous_user_context: int = Field(default=4, ge=0, le=4)
     prompt_id: str = "conversation_system"
     prompt_version: str = "0.1.2"
     model_name: str = "Qwen3.6-35B-A3B-Q4_K_M"
