@@ -5,6 +5,7 @@ const stateLabels = {
   idle: "Prêt",
   submitting: "Envoi…",
   starting: "Démarrage du modèle…",
+  preparing: "Réponse en préparation…",
   generating: "Réponse en cours",
   complete: "Réponse terminée",
   cancelled: "Réponse interrompue",
@@ -14,7 +15,7 @@ const stateLabels = {
 export function ChatApp() {
   const chat = useChat();
   const end = useRef<HTMLDivElement>(null);
-  const busy = ["submitting", "starting", "generating"].includes(chat.state);
+  const busy = ["submitting", "starting", "preparing", "generating"].includes(chat.state);
   useEffect(() => end.current?.scrollIntoView({ behavior: "smooth" }), [chat.messages]);
 
   return (
@@ -36,7 +37,7 @@ export function ChatApp() {
         {chat.messages.map((message, index) => (
           <article className={`message ${message.role}`} key={index}>
             <span>{message.role === "user" ? "Vous" : "Psych-local"}</span>
-            <p>{message.content || <em>…</em>}</p>
+            <p>{message.content || <em>◌ Réponse en préparation…</em>}</p>
           </article>
         ))}
         {chat.error && <div className="error" role="alert">{chat.error}</div>}
@@ -50,7 +51,7 @@ export function ChatApp() {
         <div ref={end} />
       </section>
 
-      {chat.state === "generating" && chat.runId && (
+      {["preparing", "generating"].includes(chat.state) && chat.runId && (
         <button className="stop" type="button" onClick={chat.stop}>■ Arrêter</button>
       )}
       <form className="composer" onSubmit={chat.submit}>
@@ -74,4 +75,3 @@ export function ChatApp() {
     </main>
   );
 }
-

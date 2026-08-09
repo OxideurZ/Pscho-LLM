@@ -5,6 +5,7 @@ export type ChatState =
   | "idle"
   | "submitting"
   | "starting"
+  | "preparing"
   | "generating"
   | "complete"
   | "cancelled"
@@ -39,7 +40,7 @@ export function useChat() {
   const submit = useCallback(async (event?: FormEvent) => {
     event?.preventDefault();
     const content = draft.trim();
-    if (!content || ["submitting", "starting", "generating"].includes(state)) return;
+    if (!content || ["submitting", "starting", "preparing", "generating"].includes(state)) return;
 
     const history: ChatMessage[] = [...messages, { role: "user", content }];
     setMessages([...history, { role: "assistant", content: "" }]);
@@ -56,9 +57,12 @@ export function useChat() {
         onStarted: (id) => {
           activeRun.current = id;
           setRunId(id);
-          setState("generating");
+          setState("preparing");
         },
-        onDelta: appendDelta,
+        onDelta: (text) => {
+          setState("generating");
+          appendDelta(text);
+        },
         onMetrics: setMetrics,
         onDone: () => finish("complete"),
         onCancelled: () => finish("cancelled"),
@@ -93,4 +97,3 @@ export function useChat() {
 
   return { messages, draft, setDraft, state, runId, metrics, error, submit, stop };
 }
-

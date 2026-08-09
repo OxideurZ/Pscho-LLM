@@ -14,7 +14,7 @@ header p { color: #8e9b92; margin: 3px 0 0; font-size: .8rem; }
 .mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; color: #101311; background: #9bc4a5; font-family: Georgia, serif; font-weight: 800; }
 .status { margin-left: auto; color: #9da9a0; font-size: .78rem; display: flex; align-items: center; gap: 7px; }
 .status i { width: 7px; height: 7px; border-radius: 50%; background: #6f7a72; }
-.status-generating i { background: #9bc4a5; box-shadow: 0 0 0 5px #9bc4a51c; animation: pulse 1.5s infinite; }
+.status-preparing i, .status-generating i { background: #9bc4a5; box-shadow: 0 0 0 5px #9bc4a51c; animation: pulse 1.5s infinite; }
 .status-error i { background: #d9897e; }
 .conversation { min-height: 0; overflow-y: auto; padding: 42px 2px 28px; scrollbar-width: thin; }
 .empty { min-height: 55vh; display: grid; place-content: center; text-align: center; color: #93a097; }
