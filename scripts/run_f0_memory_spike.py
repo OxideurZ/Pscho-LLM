@@ -65,7 +65,11 @@ def request_chat(
 
 
 async def extract_memory(settings: Settings) -> tuple[MemoryExtractionResult, int]:
-    prompt = load_prompt(REPOSITORY_ROOT, "memory_extraction", "0.1.0")
+    prompt = load_prompt(
+        REPOSITORY_ROOT,
+        settings.memory_extraction_prompt_id,
+        settings.memory_extraction_prompt_version,
+    )
     payload = {
         "target_message_id": MEMORY_MESSAGE_ID,
         "user_messages": [
@@ -99,7 +103,16 @@ def validate_smoke(result: MemoryExtractionResult) -> None:
             if source.message_id != MEMORY_MESSAGE_ID:
                 raise RuntimeError("F0 smoke referenced an unknown message")
             if MEMORY_TEXT[source.start_char : source.end_char] != source.quote:
-                raise RuntimeError("F0 smoke returned a mismatched source span")
+                matches = [
+                    index
+                    for index in range(len(MEMORY_TEXT))
+                    if MEMORY_TEXT.startswith(source.quote, index)
+                ]
+                raise RuntimeError(
+                    "F0 smoke returned a mismatched source span "
+                    f"(reported={source.start_char}:{source.end_char}, "
+                    f"quote_length={len(source.quote)}, exact_matches={matches})"
+                )
 
 
 def git_commit() -> str:
@@ -121,7 +134,11 @@ def main() -> int:
 
     settings = Settings(llama_server_url=args.llama_url)
     conversation_prompt = load_prompt(REPOSITORY_ROOT, settings.prompt_id, settings.prompt_version)
-    extraction_prompt = load_prompt(REPOSITORY_ROOT, "memory_extraction", "0.1.0")
+    extraction_prompt = load_prompt(
+        REPOSITORY_ROOT,
+        settings.memory_extraction_prompt_id,
+        settings.memory_extraction_prompt_version,
+    )
     with httpx.Client(base_url=args.llama_url, timeout=600) as client:
         health = client.get("/health")
         health.raise_for_status()

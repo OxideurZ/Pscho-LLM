@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     recent_raw_budget_tokens: int = Field(default=24_000, ge=256)
     summary_prompt_id: str = "rolling_summary"
     summary_prompt_version: str = "0.1.1"
+    memory_extraction_prompt_id: str = "memory_extraction"
+    memory_extraction_prompt_version: str = "0.1.1"
     prompt_id: str = "conversation_system"
     prompt_version: str = "0.1.2"
     model_name: str = "Qwen3.6-35B-A3B-Q4_K_M"
