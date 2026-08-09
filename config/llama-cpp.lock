@@ -1,0 +1,5 @@
+# A benchmark is not a reference result until these values identify the tested binary exactly.
+# Set them after validating the locally installed llama-server with the configured GGUF.
+LLAMA_CPP_VERSION=REQUIRED
+LLAMA_CPP_BUILD=REQUIRED
+

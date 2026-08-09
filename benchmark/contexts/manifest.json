@@ -1,0 +1,10 @@
+{
+  "generator_version": "1.0",
+  "scenarios": [
+    { "id": "context-5k", "target_tokens": 5000, "seed": 5001 },
+    { "id": "context-15k", "target_tokens": 15000, "seed": 15001 },
+    { "id": "context-30k", "target_tokens": 30000, "seed": 30001 }
+  ],
+  "task": "Résume les tensions principales, distingue les faits des interprétations et propose deux questions utiles pour poursuivre la réflexion."
+}
+

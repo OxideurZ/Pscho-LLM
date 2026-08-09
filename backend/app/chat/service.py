@@ -74,7 +74,7 @@ class ChatService:
             except LLMError as error:
                 queue.put_nowait(error)
             except Exception:
-                logger.exception("unexpected_generation_error run_id=%s", run.id)
+                logger.error("unexpected_generation_error run_id=%s", run.id)
                 queue.put_nowait(LLMError("Unexpected generation failure"))
 
         run.task = asyncio.create_task(produce(), name=f"llm-{run.id}")

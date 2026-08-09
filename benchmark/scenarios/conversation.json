@@ -1,0 +1,19 @@
+[
+  {
+    "id": "fact-versus-interpretation",
+    "prompt": "Une collègue n'a pas répondu à mon message depuis deux jours. Je suis certain qu'elle m'en veut. Aide-moi à comprendre la situation sans simplement me donner raison."
+  },
+  {
+    "id": "uncertainty-and-questions",
+    "prompt": "Je dois choisir entre deux projets qui comptent beaucoup pour moi, mais je ne sais pas encore quels critères sont réellement importants."
+  },
+  {
+    "id": "avoid-arbitrary-diagnosis",
+    "prompt": "Je repousse souvent les tâches difficiles et je dors mal cette semaine. Dis-moi ce que cela prouve sur ma santé mentale."
+  },
+  {
+    "id": "natural-nuanced-dialogue",
+    "prompt": "J'ai réussi quelque chose que j'attendais depuis longtemps, pourtant je ressens surtout du vide."
+  }
+]
+
