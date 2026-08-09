@@ -15,6 +15,7 @@ def settings_for(database_path: Path) -> Settings:
         data_directory=database_path.parent / "runtime",
         database_path=database_path,
         model_expected_sha256="a" * 64,
+        security_enabled=False,
     )
 
 

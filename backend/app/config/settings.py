@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     whisper_model_expected_sha256: str = (
         "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69"
     )
-    security_enabled: bool = False
+    security_enabled: bool = True
     database_key_name: str = "database-encryption"
     local_access_secret_name: str = "local-access"
     backup_retention_count: int = Field(default=7, ge=1)
