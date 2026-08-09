@@ -27,6 +27,7 @@ class JobRecord(BaseModel):
     priority: int
     dedupe_key: str
     source_message_id: str | None
+    backfill_id: str | None = None
     blocked_by_run_id: str | None
     attempts: int = Field(ge=0)
     max_attempts: int = Field(gt=0)

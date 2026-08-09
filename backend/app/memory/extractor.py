@@ -12,7 +12,11 @@ from backend.app.jobs import JobKind, JobRecord
 from backend.app.llm.base import LLMBackend
 from backend.app.llm.models import LLMMessage, LLMRole
 from backend.app.memory.models import MemoryExtractionResult
-from backend.app.memory.repository import MemoryExtractionBatch, MemoryRepository
+from backend.app.memory.repository import (
+    MemoryBackfillBatch,
+    MemoryExtractionBatch,
+    MemoryRepository,
+)
 from backend.app.runs import ActiveRun, RunRepository, RunStatus
 
 
@@ -35,7 +39,11 @@ class MemoryExtractor:
         self.run_repository = run_repository
         self.repository_root = repository_root
 
-    async def run(self, job: JobRecord, cancel_event: asyncio.Event) -> MemoryExtractionBatch:
+    async def run(
+        self, job: JobRecord, cancel_event: asyncio.Event
+    ) -> MemoryExtractionBatch | MemoryBackfillBatch:
+        if job.kind is JobKind.MEMORY_BACKFILL:
+            return await self.memory_repository.run_backfill(job, cancel_event)
         if job.kind is not JobKind.MEMORY_EXTRACT or job.source_message_id is None:
             raise UnsupportedMemoryJobError(job.kind)
         sources = await self.memory_repository.extraction_context(
@@ -116,6 +124,12 @@ class MemoryExtractor:
         job: JobRecord,
         result: object,
     ) -> None:
-        if not isinstance(result, MemoryExtractionBatch):
-            raise TypeError("memory extractor received an invalid result")
-        await self.memory_repository.persist_extraction(connection, job, result)
+        if isinstance(result, MemoryExtractionBatch):
+            await self.memory_repository.persist_extraction(connection, job, result)
+            return
+        if isinstance(result, MemoryBackfillBatch):
+            await self.memory_repository.persist_backfill(
+                connection, job, result, max_attempts=self.settings.memory_job_max_attempts
+            )
+            return
+        raise TypeError("memory extractor received an invalid result")

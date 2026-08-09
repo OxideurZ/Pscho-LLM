@@ -9,6 +9,7 @@ from backend.app.api.schemas import (
     ConversationCreateRequest,
     ConversationUpdateRequest,
     EntityUpdateRequest,
+    MemoryBackfillRequest,
     MemoryUpdateRequest,
     TurnRequest,
     VoiceJobCreateRequest,
@@ -270,6 +271,44 @@ async def memory_status(request: Request) -> dict[str, Any]:
         "jobs": {"pending": counts[0], "retry": counts[1], "failed": counts[2]},
         "memories": {"active": counts[3], "disabled": counts[4]},
     }
+
+
+@router.post("/memory/backfill", dependencies=protected)
+async def memory_backfill(
+    payload: MemoryBackfillRequest, request: Request
+) -> JSONResponse:
+    repository = request.app.state.memory_repository
+    preview = await repository.preview_backfill(
+        conversation_ids=payload.conversation_ids,
+        created_after=payload.created_after.isoformat() if payload.created_after else None,
+        created_before=payload.created_before.isoformat() if payload.created_before else None,
+        all_eligible=payload.all_eligible,
+        extractor_version=request.app.state.settings.memory_extraction_prompt_version,
+    )
+    if not payload.confirm:
+        return JSONResponse({"preview": preview, "confirmation_required": True})
+    backfill = await repository.start_backfill(
+        preview=preview,
+        batch_size=request.app.state.settings.memory_backfill_enqueue_batch_size,
+        max_attempts=request.app.state.settings.memory_job_max_attempts,
+    )
+    return JSONResponse({"backfill": backfill, "confirmation_required": False}, status_code=202)
+
+
+@router.get("/memory/backfill/{backfill_id}", dependencies=protected)
+async def memory_backfill_progress(backfill_id: str, request: Request) -> JSONResponse:
+    try:
+        progress = await request.app.state.memory_repository.backfill_progress(backfill_id)
+    except MemoryNotFoundError as error:
+        return memory_error(error)
+    return JSONResponse(progress)
+
+
+@router.get("/memory/audit", dependencies=protected)
+async def memory_audit(request: Request) -> JSONResponse:
+    if not request.app.state.settings.memory_debug_tools_enabled:
+        return error_response("MEMORY_AUDIT_DISABLED", False, 404)
+    return JSONResponse(await request.app.state.memory_repository.audit_metrics())
 
 
 @router.get("/memory", response_model=None, dependencies=protected)

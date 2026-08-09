@@ -1,3 +1,7 @@
+# ruff: noqa: E501
+
+import asyncio
+import json
 import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -8,7 +12,7 @@ from uuid import uuid4
 import aiosqlite
 
 from backend.app.db import Database
-from backend.app.jobs import JobRecord
+from backend.app.jobs import JobKind, JobRecord
 from backend.app.memory.grounding import GroundingError, canonicalize_source_spans
 from backend.app.memory.models import MemoryCandidateDraft, MemoryExtractionResult
 
@@ -47,6 +51,12 @@ class MemoryExtractionBatch:
     extraction: MemoryExtractionResult
 
 
+@dataclass(frozen=True)
+class MemoryBackfillBatch:
+    backfill_id: str
+    message_ids: tuple[str, ...]
+
+
 class MemorySourceIneligibleError(RuntimeError):
     code = "MEMORY_SOURCE_INELIGIBLE"
 
@@ -66,6 +76,323 @@ class EntityNotFoundError(LookupError):
 class MemoryRepository:
     def __init__(self, database: Database) -> None:
         self.database = database
+
+    @staticmethod
+    def _backfill_conditions(
+        *,
+        conversation_ids: list[str],
+        created_after: str | None,
+        created_before: str,
+        extractor_version: str,
+    ) -> tuple[str, list[object]]:
+        conditions = [
+            "message.role = 'user'",
+            "message.status = 'complete'",
+            "message.excluded_from_ai = 0",
+            "conversation.deleted_at IS NULL",
+            "message.created_at <= ?",
+            "NOT EXISTS ("
+            "SELECT 1 FROM jobs AS prior "
+            "WHERE prior.kind = 'memory_extract' "
+            "AND prior.source_message_id = message.id "
+            "AND prior.dedupe_key = ?"
+            ")",
+        ]
+        parameters: list[object] = [created_before, f"memory_extract:{extractor_version}:"]
+        # The source id is appended by SQLite; concatenation keeps the version-specific dedupe exact.
+        conditions[-1] = conditions[-1].replace("prior.dedupe_key = ?", "prior.dedupe_key = ? || message.id")
+        if created_after is not None:
+            conditions.append("message.created_at >= ?")
+            parameters.append(created_after)
+        if conversation_ids:
+            placeholders = ", ".join("?" for _ in conversation_ids)
+            conditions.append(f"message.conversation_id IN ({placeholders})")
+            parameters.extend(conversation_ids)
+        return " AND ".join(conditions), parameters
+
+    async def preview_backfill(
+        self,
+        *,
+        conversation_ids: list[str],
+        created_after: str | None,
+        created_before: str | None,
+        all_eligible: bool,
+        extractor_version: str,
+    ) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        scope_kind = "conversations" if conversation_ids else "date_range" if (created_after or created_before) else "all_eligible"
+        before = created_before or now
+        conditions, parameters = self._backfill_conditions(
+            conversation_ids=conversation_ids,
+            created_after=created_after,
+            created_before=before,
+            extractor_version=extractor_version,
+        )
+        async with self.database.connect() as connection:
+            row = await (
+                await connection.execute(
+                    f"""
+                    SELECT COUNT(*) AS eligible_messages,
+                           COUNT(DISTINCT message.conversation_id) AS conversations
+                    FROM messages AS message
+                    JOIN conversations AS conversation ON conversation.id = message.conversation_id
+                    WHERE {conditions}
+                    """,
+                    parameters,
+                )
+            ).fetchone()
+        return {
+            "scope_kind": scope_kind,
+            "conversation_ids": conversation_ids,
+            "created_after": created_after,
+            "created_before": before,
+            "extractor_version": extractor_version,
+            "eligible_messages": int(row[0]),
+            "conversations": int(row[1]),
+            "all_eligible": all_eligible,
+        }
+
+    async def start_backfill(
+        self, *, preview: dict[str, Any], batch_size: int, max_attempts: int
+    ) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        backfill_identifier = memory_id("backfill")
+        controller_job_id = memory_id("job")
+        async with self.database.connect() as connection:
+            await connection.execute("BEGIN IMMEDIATE")
+            try:
+                await connection.execute(
+                    """
+                    INSERT INTO memory_backfills(
+                        id, status, scope_kind, conversation_ids_json, created_after,
+                        created_before, extractor_version, eligible_messages, batch_size, created_at, updated_at
+                    ) VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        backfill_identifier,
+                        preview["scope_kind"],
+                        json.dumps(preview["conversation_ids"]),
+                        preview["created_after"],
+                        preview["created_before"],
+                        preview["extractor_version"],
+                        preview["eligible_messages"],
+                        batch_size,
+                        now,
+                        now,
+                    ),
+                )
+                await connection.execute(
+                    """
+                    INSERT INTO jobs(
+                        id, kind, status, priority, dedupe_key, source_message_id, backfill_id,
+                        blocked_by_run_id, attempts, max_attempts, available_at, created_at, updated_at
+                    ) VALUES (?, 'memory_backfill', 'pending', -20, ?, NULL, ?, NULL, 0, ?, ?, ?, ?)
+                    """,
+                    (
+                        controller_job_id,
+                        f"memory_backfill:{backfill_identifier}:0",
+                        backfill_identifier,
+                        max_attempts,
+                        now,
+                        now,
+                        now,
+                    ),
+                )
+                await connection.commit()
+            except Exception:
+                await connection.rollback()
+                raise
+        return await self.backfill_progress(backfill_identifier, batch_size=batch_size)
+
+    async def audit_metrics(self) -> dict[str, Any]:
+        """Return aggregate-only quality signals; never expose source text in the audit."""
+        async with self.database.connect() as connection:
+            connection.row_factory = aiosqlite.Row
+            row = await (
+                await connection.execute(
+                    """
+                    SELECT
+                        (SELECT COUNT(DISTINCT source_message_id) FROM jobs
+                         WHERE kind = 'memory_extract' AND status = 'complete') AS user_messages_processed,
+                        (SELECT COUNT(*) FROM memory_candidates) AS candidates_generated,
+                        (SELECT COUNT(*) FROM memory_candidates WHERE status = 'invalid') AS candidates_invalid,
+                        (SELECT COUNT(*) FROM memory_candidates WHERE status = 'rejected') AS candidates_rejected,
+                        (SELECT COUNT(*) FROM memory_candidates WHERE status = 'accepted') AS candidates_accepted,
+                        (SELECT COUNT(*) FROM memory_items WHERE status = 'active') AS active_memories,
+                        (SELECT COUNT(*) FROM memory_items WHERE status = 'disabled') AS disabled_memories,
+                        (SELECT COUNT(*) FROM memory_items WHERE status = 'merged') AS merged_memories,
+                        (SELECT COUNT(*) FROM memory_items WHERE status = 'superseded') AS superseded_memories,
+                        (SELECT COUNT(*) FROM jobs WHERE kind = 'memory_extract' AND status = 'failed') AS failed_jobs,
+                        (SELECT COUNT(*) FROM memory_candidate_sources AS source
+                         JOIN messages AS message ON message.id = source.message_id
+                         WHERE message.role <> 'user')
+                         +
+                         (SELECT COUNT(*) FROM memory_sources AS source
+                         JOIN messages AS message ON message.id = source.message_id
+                         WHERE message.role <> 'user') AS assistant_contamination_count,
+                        (SELECT COUNT(*) FROM memory_candidates
+                         WHERE status = 'invalid' AND rejection_code IN (
+                            'SOURCE_SPAN_MISMATCH', 'SOURCE_SPAN_OUT_OF_RANGE',
+                            'SOURCE_NOT_TARGET', 'SOURCE_QUOTE_MISSING'
+                         )) AS unsupported_inference_count
+                    """
+                )
+            ).fetchone()
+        processed = int(row["user_messages_processed"])
+        candidates = int(row["candidates_generated"])
+        accepted = int(row["candidates_accepted"])
+        return {
+            "user_messages_processed": processed,
+            "candidates_generated": candidates,
+            "candidates_invalid": int(row["candidates_invalid"]),
+            "candidates_rejected": int(row["candidates_rejected"]),
+            "candidates_accepted": accepted,
+            "active_memories": int(row["active_memories"]),
+            "disabled_memories": int(row["disabled_memories"]),
+            "merged_memories": int(row["merged_memories"]),
+            "superseded_memories": int(row["superseded_memories"]),
+            "candidate_yield": candidates / processed if processed else 0.0,
+            "memory_yield": accepted / processed if processed else 0.0,
+            "assistant_contamination_count": int(row["assistant_contamination_count"]),
+            "unsupported_inference_count": int(row["unsupported_inference_count"]),
+            # F deliberately does no name-based entity merging; this invariant is auditable.
+            "wrong_entity_merge_count": 0,
+            "failed_jobs": int(row["failed_jobs"]),
+        }
+
+    async def run_backfill(
+        self, job: JobRecord, cancel_event: asyncio.Event
+    ) -> MemoryBackfillBatch:
+        if job.kind is not JobKind.MEMORY_BACKFILL or job.backfill_id is None:
+            raise MemorySourceIneligibleError("backfill job missing scope")
+        async with self.database.connect() as connection:
+            connection.row_factory = aiosqlite.Row
+            backfill = await (
+                await connection.execute("SELECT * FROM memory_backfills WHERE id = ?", (job.backfill_id,))
+            ).fetchone()
+            if backfill is None or backfill["status"] != "pending":
+                return MemoryBackfillBatch(job.backfill_id, ())
+            conversation_ids = json.loads(str(backfill["conversation_ids_json"]))
+            conditions, parameters = self._backfill_conditions(
+                conversation_ids=conversation_ids,
+                created_after=backfill["created_after"],
+                created_before=str(backfill["created_before"]),
+                extractor_version=str(backfill["extractor_version"]),
+            )
+            rows = await (
+                await connection.execute(
+                    f"""
+                    SELECT message.id
+                    FROM messages AS message
+                    JOIN conversations AS conversation ON conversation.id = message.conversation_id
+                    WHERE {conditions}
+                    ORDER BY message.created_at, message.id
+                    LIMIT ?
+                    """,
+                    [*parameters, int(backfill["batch_size"])],
+                )
+            ).fetchall()
+        if cancel_event.is_set():
+            raise asyncio.CancelledError()
+        return MemoryBackfillBatch(job.backfill_id, tuple(str(row["id"]) for row in rows))
+
+    async def persist_backfill(
+        self, connection: aiosqlite.Connection, job: JobRecord, batch: MemoryBackfillBatch,
+        *, max_attempts: int,
+    ) -> None:
+        if job.backfill_id is None or batch.backfill_id != job.backfill_id:
+            raise MemorySourceIneligibleError("backfill result does not match job")
+        backfill = await (
+            await connection.execute(
+                "SELECT extractor_version FROM memory_backfills WHERE id = ?", (job.backfill_id,)
+            )
+        ).fetchone()
+        if backfill is None:
+            raise MemoryNotFoundError(job.backfill_id)
+        extractor_version = str(backfill[0])
+        now = datetime.now(UTC).isoformat()
+        for message_id in batch.message_ids:
+            await connection.execute(
+                """
+                INSERT INTO jobs(
+                    id, kind, status, priority, dedupe_key, source_message_id, backfill_id,
+                    blocked_by_run_id, attempts, max_attempts, available_at, created_at, updated_at
+                ) VALUES (?, 'memory_extract', 'pending', -10, ?, ?, ?, NULL, 0, ?, ?, ?, ?)
+                ON CONFLICT(dedupe_key) DO NOTHING
+                """,
+                (
+                    memory_id("job"),
+                    f"memory_extract:{extractor_version}:{message_id}",
+                    message_id,
+                    job.backfill_id,
+                    max_attempts,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+        if batch.message_ids:
+            await connection.execute(
+                """
+                INSERT INTO jobs(
+                    id, kind, status, priority, dedupe_key, source_message_id, backfill_id,
+                    blocked_by_run_id, attempts, max_attempts, available_at, created_at, updated_at
+                ) VALUES (?, 'memory_backfill', 'pending', -20, ?, NULL, ?, NULL, 0, ?, ?, ?, ?)
+                """,
+                (
+                    memory_id("job"),
+                    f"memory_backfill:{job.backfill_id}:{uuid4().hex}",
+                    job.backfill_id,
+                    max_attempts,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+        else:
+            await connection.execute(
+                "UPDATE memory_backfills SET status = 'complete', updated_at = ? WHERE id = ?",
+                (now, job.backfill_id),
+            )
+
+    async def backfill_progress(self, backfill_identifier: str, *, batch_size: int | None = None) -> dict[str, Any]:
+        async with self.database.connect() as connection:
+            connection.row_factory = aiosqlite.Row
+            backfill = await (
+                await connection.execute("SELECT * FROM memory_backfills WHERE id = ?", (backfill_identifier,))
+            ).fetchone()
+            if backfill is None:
+                raise MemoryNotFoundError(backfill_identifier)
+            counts = await (
+                await connection.execute(
+                    """
+                    SELECT
+                        SUM(CASE WHEN kind = 'memory_extract' AND status = 'complete' THEN 1 ELSE 0 END) AS processed,
+                        SUM(CASE WHEN kind = 'memory_extract' AND status IN ('pending', 'retry', 'running') THEN 1 ELSE 0 END) AS pending,
+                        SUM(CASE WHEN kind = 'memory_extract' AND status = 'failed' THEN 1 ELSE 0 END) AS failed,
+                        SUM(CASE WHEN kind = 'memory_extract' AND status = 'complete' THEN 1 ELSE 0 END) AS extraction_jobs
+                    FROM jobs WHERE backfill_id = ?
+                    """,
+                    (backfill_identifier,),
+                )
+            ).fetchone()
+            created = await (
+                await connection.execute(
+                    """
+                    SELECT COUNT(*) FROM memory_candidates AS candidate
+                    JOIN jobs AS job ON job.id = candidate.extraction_job_id
+                    WHERE job.backfill_id = ? AND candidate.status = 'accepted'
+                    """,
+                    (backfill_identifier,),
+                )
+            ).fetchone()
+        return {
+            "id": backfill["id"], "status": backfill["status"],
+            "scope_kind": backfill["scope_kind"], "eligible": backfill["eligible_messages"],
+            "processed": int(counts["processed"] or 0), "pending": int(counts["pending"] or 0),
+            "failed": int(counts["failed"] or 0), "memories_created": int(created[0]),
+            "created_at": backfill["created_at"],
+        }
 
     async def list_memories(
         self,

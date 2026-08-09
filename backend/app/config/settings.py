@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     memory_background_idle_seconds: int = Field(default=120, ge=1)
     memory_job_max_attempts: int = Field(default=3, ge=1, le=10)
     memory_previous_user_context: int = Field(default=4, ge=0, le=4)
+    memory_backfill_enqueue_batch_size: int = Field(default=25, ge=1, le=50)
+    memory_debug_tools_enabled: bool = False
     prompt_id: str = "conversation_system"
     prompt_version: str = "0.1.2"
     model_name: str = "Qwen3.6-35B-A3B-Q4_K_M"

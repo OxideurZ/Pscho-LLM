@@ -22,6 +22,7 @@ class JobRepository:
         kind: JobKind,
         dedupe_key: str,
         source_message_id: str | None = None,
+        backfill_id: str | None = None,
         blocked_by_run_id: str | None = None,
         priority: int = 0,
         max_attempts: int = 3,
@@ -35,10 +36,10 @@ class JobRepository:
             await connection.execute(
                 """
                 INSERT INTO jobs(
-                    id, kind, status, priority, dedupe_key, source_message_id,
+                    id, kind, status, priority, dedupe_key, source_message_id, backfill_id,
                     blocked_by_run_id, attempts, max_attempts, available_at,
                     created_at, updated_at
-                ) VALUES (?, ?, 'pending', ?, ?, ?, ?, 0, ?, ?, ?, ?)
+                ) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
                 ON CONFLICT(dedupe_key) DO NOTHING
                 """,
                 (
@@ -47,6 +48,7 @@ class JobRepository:
                     priority,
                     dedupe_key,
                     source_message_id,
+                    backfill_id,
                     blocked_by_run_id,
                     max_attempts,
                     available_at or now,

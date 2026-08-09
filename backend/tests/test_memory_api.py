@@ -110,3 +110,42 @@ def test_memory_api_inspection_control_and_structured_delete(tmp_path: Path) -> 
         message["content"] == "Je préfère les réponses détaillées."
         for message in raw_messages.json()["items"]
     )
+
+
+def test_backfill_requires_confirmation_and_audit_stays_debug_only(tmp_path: Path) -> None:
+    app = create_app(settings_for(tmp_path / "app.sqlite"), FakeBackend())
+    with TestClient(app) as client:
+        preview = client.post("/v1/memory/backfill", json={"all_eligible": True})
+        audit = client.get("/v1/memory/audit")
+
+    assert preview.status_code == 200
+    assert preview.json()["confirmation_required"] is True
+    assert preview.json()["preview"]["eligible_messages"] == 0
+    assert audit.status_code == 404
+
+
+def test_memory_disabled_does_not_enqueue_new_automatic_extraction(tmp_path: Path) -> None:
+    settings = settings_for(tmp_path / "app.sqlite").model_copy(
+        update={"memory_enabled": False}
+    )
+    app = create_app(settings, FakeBackend())
+    with TestClient(app) as client:
+        conversation_id = client.post("/v1/conversations", json={}).json()["id"]
+        response = client.post(
+            f"/v1/conversations/{conversation_id}/turns",
+            json={"client_turn_id": str(uuid4()), "content": "Je préfère le thé."},
+        )
+
+        async def extraction_job_count() -> int:
+            async with app.state.database.connect() as connection:
+                row = await (
+                    await connection.execute(
+                        "SELECT COUNT(*) FROM jobs WHERE kind = 'memory_extract'"
+                    )
+                ).fetchone()
+            return int(row[0])
+
+        jobs = asyncio.run(extraction_job_count())
+
+    assert response.status_code == 200
+    assert jobs == 0

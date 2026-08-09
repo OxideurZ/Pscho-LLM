@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -57,3 +58,25 @@ class MemoryUpdateRequest(BaseModel):
 
 class EntityUpdateRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=256)
+
+
+class MemoryBackfillRequest(BaseModel):
+    conversation_ids: list[str] = Field(default_factory=list, max_length=500)
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+    all_eligible: bool = False
+    confirm: bool = False
+
+    @model_validator(mode="after")
+    def require_one_scope(self) -> "MemoryBackfillRequest":
+        has_date_range = self.created_after is not None or self.created_before is not None
+        selected = int(bool(self.conversation_ids)) + int(has_date_range) + int(self.all_eligible)
+        if selected != 1:
+            raise ValueError("Select conversations, a date range, or all eligible history")
+        if (
+            self.created_after is not None
+            and self.created_before is not None
+            and self.created_after > self.created_before
+        ):
+            raise ValueError("created_after must not be after created_before")
+        return self

@@ -54,6 +54,31 @@ export type MemoryStatus = {
   memories: { active: number; disabled: number };
 };
 
+export type BackfillInput = {
+  conversation_ids?: string[];
+  created_after?: string;
+  created_before?: string;
+  all_eligible?: boolean;
+};
+
+export type BackfillPreview = {
+  scope_kind: "conversations" | "date_range" | "all_eligible";
+  eligible_messages: number;
+  conversations: number;
+  created_after: string | null;
+  created_before: string;
+};
+
+export type BackfillProgress = {
+  id: string;
+  status: "pending" | "complete" | "failed" | "cancelled";
+  eligible: number;
+  processed: number;
+  pending: number;
+  failed: number;
+  memories_created: number;
+};
+
 export const listMemories = (status?: string, kind?: string) => {
   const query = new URLSearchParams();
   if (status) query.set("status", status);
@@ -92,3 +117,17 @@ export const renameEntity = (id: string, displayName: string) =>
   });
 
 export const getMemoryStatus = () => requestJson<MemoryStatus>("/v1/memory/status");
+
+export const previewBackfill = (input: BackfillInput) =>
+  requestJson<{ preview: BackfillPreview; confirmation_required: true }>("/v1/memory/backfill", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+export const startBackfill = (input: BackfillInput) =>
+  requestJson<{ backfill: BackfillProgress; confirmation_required: false }>("/v1/memory/backfill", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...input, confirm: true }),
+  });
