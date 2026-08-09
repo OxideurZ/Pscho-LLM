@@ -3,6 +3,7 @@ import { useChat } from "../chat/useChat";
 
 const stateLabels = {
   idle: "Prêt",
+  loading: "Chargement…",
   submitting: "Envoi…",
   starting: "Démarrage du modèle…",
   preparing: "Réponse en préparation…",
@@ -15,7 +16,7 @@ const stateLabels = {
 export function ChatApp() {
   const chat = useChat();
   const end = useRef<HTMLDivElement>(null);
-  const busy = ["submitting", "starting", "preparing", "generating"].includes(chat.state);
+  const busy = ["loading", "submitting", "starting", "preparing", "generating"].includes(chat.state);
   useEffect(() => end.current?.scrollIntoView({ behavior: "smooth" }), [chat.messages]);
 
   return (
@@ -31,13 +32,16 @@ export function ChatApp() {
           <div className="empty">
             <p className="eyebrow">Espace local</p>
             <h2>Qu’est-ce qui vous occupe l’esprit&nbsp;?</h2>
-            <p>Les messages restent dans cette session de navigation et ne sont pas enregistrés.</p>
+            <p>Cette conversation est enregistrée localement. Utilisez uniquement des données de test non sensibles pendant Milestone B.</p>
           </div>
         )}
         {chat.messages.map((message, index) => (
-          <article className={`message ${message.role}`} key={index}>
+          <article className={`message ${message.role}`} key={message.id ?? index}>
             <span>{message.role === "user" ? "Vous" : "Psych-local"}</span>
             <p>{message.content || <em>◌ Réponse en préparation…</em>}</p>
+            {message.status && message.status !== "complete" && (
+              <small className={`message-status status-${message.status}`}>{message.status}</small>
+            )}
           </article>
         ))}
         {chat.error && <div className="error" role="alert">{chat.error}</div>}
@@ -71,7 +75,7 @@ export function ChatApp() {
         />
         <button type="submit" disabled={busy || !chat.draft.trim()} aria-label="Envoyer">↑</button>
       </form>
-      <footer>Aucune mémoire persistante · Propulsé localement par llama.cpp</footer>
+      <footer>Conversation persistée localement · Aucune mémoire entre conversations</footer>
     </main>
   );
 }

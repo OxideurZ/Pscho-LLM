@@ -1,8 +1,16 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { cancelRun, ChatMessage, RunMetrics, streamChat } from "../api/chat";
+import {
+  cancelRun,
+  ChatMessage,
+  createConversation,
+  loadConversationMessages,
+  RunMetrics,
+  streamConversationTurn,
+} from "../api/chat";
 
 export type ChatState =
   | "idle"
+  | "loading"
   | "submitting"
   | "starting"
   | "preparing"
@@ -18,8 +26,23 @@ export function useChat() {
   const [runId, setRunId] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<RunMetrics | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   const activeRun = useRef<string | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
+
+  const refreshMessages = useCallback(async (id: string) => {
+    setMessages(await loadConversationMessages(id));
+  }, []);
+
+  const ensureConversation = useCallback(async (): Promise<string> => {
+    if (conversationIdRef.current) return conversationIdRef.current;
+    const conversation = await createConversation();
+    localStorage.setItem("psych-local-conversation-id", conversation.id);
+    conversationIdRef.current = conversation.id;
+    setConversationId(conversation.id);
+    return conversation.id;
+  }, []);
 
   const appendDelta = useCallback((text: string) => {
     setMessages((current) => {
@@ -42,18 +65,28 @@ export function useChat() {
     const content = draft.trim();
     if (!content || ["submitting", "starting", "preparing", "generating"].includes(state)) return;
 
-    const history: ChatMessage[] = [...messages, { role: "user", content }];
-    setMessages([...history, { role: "assistant", content: "" }]);
-    setDraft("");
+    const clientTurnId = crypto.randomUUID();
     setError(null);
     setMetrics(null);
     setState("submitting");
-    const abortController = new AbortController();
-    controller.current = abortController;
 
     try {
+      const id = await ensureConversation();
+      setMessages((current) => [
+        ...current,
+        { id: `pending-user-${clientTurnId}`, role: "user", content, status: "complete" },
+        {
+          id: `pending-assistant-${clientTurnId}`,
+          role: "assistant",
+          content: "",
+          status: "streaming",
+        },
+      ]);
+      setDraft("");
+      const abortController = new AbortController();
+      controller.current = abortController;
       setState("starting");
-      await streamChat(history, abortController.signal, {
+      await streamConversationTurn(id, clientTurnId, content, abortController.signal, {
         onStarted: (id) => {
           activeRun.current = id;
           setRunId(id);
@@ -64,11 +97,18 @@ export function useChat() {
           appendDelta(text);
         },
         onMetrics: setMetrics,
-        onDone: () => finish("complete"),
-        onCancelled: () => finish("cancelled"),
+        onDone: () => {
+          finish("complete");
+          void refreshMessages(id);
+        },
+        onCancelled: () => {
+          finish("cancelled");
+          void refreshMessages(id);
+        },
         onError: (code, retryable) => {
           setError(`${code}${retryable ? " — vous pouvez réessayer." : ""}`);
           finish("error");
+          void refreshMessages(id);
         },
       });
     } catch (caught) {
@@ -76,7 +116,7 @@ export function useChat() {
       setError("Connexion interrompue — vérifiez que le service local fonctionne.");
       finish("error");
     }
-  }, [appendDelta, draft, finish, messages, state]);
+  }, [appendDelta, draft, ensureConversation, finish, refreshMessages, state]);
 
   const stop = useCallback(async () => {
     if (!activeRun.current) return;
@@ -89,11 +129,61 @@ export function useChat() {
     }
   }, [finish]);
 
-  useEffect(() => () => {
-    const id = activeRun.current;
-    if (id) void fetch(`/v1/runs/${encodeURIComponent(id)}/cancel`, { method: "POST", keepalive: true });
-    controller.current?.abort();
-  }, []);
+  useEffect(() => {
+    let active = true;
+    const resume = async () => {
+      setState("loading");
+      try {
+        const stored = localStorage.getItem("psych-local-conversation-id");
+        if (stored) {
+          try {
+            const persisted = await loadConversationMessages(stored);
+            if (!active) return;
+            conversationIdRef.current = stored;
+            setConversationId(stored);
+            setMessages(persisted);
+            setState("idle");
+            return;
+          } catch {
+            localStorage.removeItem("psych-local-conversation-id");
+          }
+        }
+        const id = await ensureConversation();
+        if (active) {
+          await refreshMessages(id);
+          setState("idle");
+        }
+      } catch {
+        if (active) {
+          setError("Impossible de charger la conversation locale.");
+          setState("error");
+        }
+      }
+    };
+    void resume();
+    return () => {
+      active = false;
+      const id = activeRun.current;
+      if (id) {
+        void fetch(`/v1/runs/${encodeURIComponent(id)}/cancel`, {
+          method: "POST",
+          keepalive: true,
+        });
+      }
+      controller.current?.abort();
+    };
+  }, [ensureConversation, refreshMessages]);
 
-  return { messages, draft, setDraft, state, runId, metrics, error, submit, stop };
+  return {
+    messages,
+    draft,
+    setDraft,
+    state,
+    runId,
+    conversationId,
+    metrics,
+    error,
+    submit,
+    stop,
+  };
 }

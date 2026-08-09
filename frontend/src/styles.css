@@ -28,6 +28,8 @@ header p { color: #8e9b92; margin: 3px 0 0; font-size: .8rem; }
 .message.user p { padding: 13px 17px; border: 1px solid #354038; border-radius: 18px 18px 4px 18px; background: #1d231f; }
 .message.assistant p { color: #e7ebe8; font-size: 1.04rem; }
 .message em { color: #7c8980; animation: pulse 1.4s infinite; }
+.message-status { display: block; margin-top: 6px; color: #7c8980; font-size: .68rem; }
+.message-status.status-interrupted, .message-status.status-failed { color: #d99a8f; }
 .metrics { display: flex; flex-wrap: wrap; gap: 10px 22px; color: #718078; font-size: .7rem; margin: -14px 0 26px; }
 .metrics b { color: #9ca9a0; font-weight: 500; margin-left: 3px; }
 .error { border-left: 2px solid #d9897e; color: #e2aaa2; background: #3a211e66; padding: 11px 14px; margin: 0 0 24px; font-size: .86rem; }

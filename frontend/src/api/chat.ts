@@ -3,8 +3,16 @@ import { readSSE } from "./sse";
 export type ChatRole = "user" | "assistant";
 
 export interface ChatMessage {
+  id?: string;
   role: ChatRole;
   content: string;
+  sequence_no?: number;
+  status?: "complete" | "streaming" | "interrupted" | "failed" | "deleted";
+}
+
+export interface ConversationRecord {
+  id: string;
+  title: string | null;
 }
 
 export interface RunMetrics {
@@ -29,17 +37,46 @@ export interface ChatHandlers {
   onError: (code: string, retryable: boolean) => void;
 }
 
-export async function streamChat(
-  messages: ChatMessage[],
+export async function createConversation(): Promise<ConversationRecord> {
+  const response = await fetch("/v1/conversations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: null }),
+  });
+  if (!response.ok) throw new Error(`HTTP_${response.status}`);
+  return response.json() as Promise<ConversationRecord>;
+}
+
+export async function loadConversationMessages(conversationId: string): Promise<ChatMessage[]> {
+  const response = await fetch(
+    `/v1/conversations/${encodeURIComponent(conversationId)}/messages?limit=500`,
+  );
+  if (!response.ok) throw new Error(`HTTP_${response.status}`);
+  const body = await response.json() as { items: ChatMessage[] };
+  return body.items;
+}
+
+export async function streamConversationTurn(
+  conversationId: string,
+  clientTurnId: string,
+  content: string,
   signal: AbortSignal,
   handlers: ChatHandlers,
 ): Promise<void> {
-  const response = await fetch("/v1/chat", {
+  const response = await fetch(
+    `/v1/conversations/${encodeURIComponent(conversationId)}/turns`,
+    {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, generation: { max_tokens: 800 } }),
+    body: JSON.stringify({
+      client_turn_id: clientTurnId,
+      content,
+      input_type: "text",
+      generation: { max_tokens: 800 },
+    }),
     signal,
-  });
+    },
+  );
 
   for await (const frame of readSSE(response)) {
     const data = frame.data as Record<string, unknown>;
