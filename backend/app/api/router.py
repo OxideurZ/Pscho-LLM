@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.app.api.schemas import (
@@ -19,14 +19,25 @@ from backend.app.conversations import (
 from backend.app.llm.models import GenerationOptions
 from backend.app.runs.registry import RunAlreadyFinishedError, RunNotFoundError
 from backend.app.runtime import RuntimeNotManagedError
+from backend.app.security import origin_is_local, require_local_session
 from backend.app.stt import VoiceJobConflictError, VoiceJobNotFoundError
 from backend.app.stt.models import VoiceJob
 
 router = APIRouter(prefix="/v1")
+protected = [Depends(require_local_session)]
 
 
 def error_response(code: str, retryable: bool, status_code: int) -> JSONResponse:
     return JSONResponse({"error": {"code": code, "retryable": retryable}}, status_code=status_code)
+
+
+@router.post("/auth/bootstrap", dependencies=[])
+async def bootstrap_session(request: Request) -> JSONResponse:
+    if request.app.state.settings.security_enabled and not origin_is_local(request):
+        return error_response("LOCAL_ORIGIN_REQUIRED", False, 403)
+    response = JSONResponse({"status": "authenticated"})
+    request.app.state.local_session_manager.issue(response)
+    return response
 
 
 def conversation_error(error: Exception) -> JSONResponse:
@@ -109,7 +120,7 @@ async def runtime_information(request: Request) -> dict[str, Any]:
     }
 
 
-@router.post("/runtime/offload", status_code=202)
+@router.post("/runtime/offload", status_code=202, dependencies=protected)
 async def offload_runtime(request: Request) -> JSONResponse:
     try:
         request.app.state.runtime_offload_service.schedule()
@@ -133,7 +144,7 @@ async def stt_model(request: Request) -> dict[str, Any]:
     return model.__dict__
 
 
-@router.post("/stt/jobs", status_code=201)
+@router.post("/stt/jobs", status_code=201, dependencies=protected)
 async def create_voice_job(payload: VoiceJobCreateRequest, request: Request) -> JSONResponse:
     try:
         await request.app.state.conversation_repository.get(payload.conversation_id)
@@ -147,7 +158,7 @@ async def create_voice_job(payload: VoiceJobCreateRequest, request: Request) -> 
     return JSONResponse(voice_job_payload(job), status_code=201)
 
 
-@router.post("/stt/jobs/{voice_input_id}/chunks", status_code=204)
+@router.post("/stt/jobs/{voice_input_id}/chunks", status_code=204, dependencies=protected)
 async def append_voice_chunk(voice_input_id: str, request: Request) -> JSONResponse:
     try:
         from uuid import UUID
@@ -165,7 +176,7 @@ async def append_voice_chunk(voice_input_id: str, request: Request) -> JSONRespo
     )
 
 
-@router.post("/stt/jobs/{voice_input_id}/finalize", status_code=202)
+@router.post("/stt/jobs/{voice_input_id}/finalize", status_code=202, dependencies=protected)
 async def finalize_voice_job(voice_input_id: str, request: Request) -> JSONResponse:
     try:
         from uuid import UUID
@@ -176,7 +187,7 @@ async def finalize_voice_job(voice_input_id: str, request: Request) -> JSONRespo
     return JSONResponse(voice_job_payload(job), status_code=202)
 
 
-@router.get("/stt/jobs/{voice_input_id}")
+@router.get("/stt/jobs/{voice_input_id}", dependencies=protected)
 async def get_voice_job(voice_input_id: str, request: Request) -> JSONResponse:
     try:
         from uuid import UUID
@@ -187,7 +198,7 @@ async def get_voice_job(voice_input_id: str, request: Request) -> JSONResponse:
     return JSONResponse(voice_job_payload(job))
 
 
-@router.post("/stt/jobs/{voice_input_id}/cancel", status_code=202)
+@router.post("/stt/jobs/{voice_input_id}/cancel", status_code=202, dependencies=protected)
 async def cancel_voice_job(voice_input_id: str, request: Request) -> JSONResponse:
     try:
         from uuid import UUID
@@ -198,7 +209,7 @@ async def cancel_voice_job(voice_input_id: str, request: Request) -> JSONRespons
     return JSONResponse(voice_job_payload(job), status_code=202)
 
 
-@router.post("/conversations", status_code=201)
+@router.post("/conversations", status_code=201, dependencies=protected)
 async def create_conversation(
     payload: ConversationCreateRequest, request: Request
 ) -> dict[str, Any]:
@@ -206,7 +217,7 @@ async def create_conversation(
     return conversation.model_dump(mode="json")
 
 
-@router.get("/conversations")
+@router.get("/conversations", dependencies=protected)
 async def list_conversations(
     request: Request,
     limit: int = 50,
@@ -224,7 +235,7 @@ async def list_conversations(
     }
 
 
-@router.get("/conversations/{conversation_id}")
+@router.get("/conversations/{conversation_id}", dependencies=protected)
 async def get_conversation(conversation_id: str, request: Request) -> JSONResponse:
     try:
         conversation = await request.app.state.conversation_repository.get(conversation_id)
@@ -233,7 +244,7 @@ async def get_conversation(conversation_id: str, request: Request) -> JSONRespon
     return JSONResponse(conversation.model_dump(mode="json"))
 
 
-@router.patch("/conversations/{conversation_id}")
+@router.patch("/conversations/{conversation_id}", dependencies=protected)
 async def update_conversation(
     conversation_id: str, payload: ConversationUpdateRequest, request: Request
 ) -> JSONResponse:
@@ -249,7 +260,7 @@ async def update_conversation(
     return JSONResponse(conversation.model_dump(mode="json"))
 
 
-@router.delete("/conversations/{conversation_id}", status_code=204)
+@router.delete("/conversations/{conversation_id}", status_code=204, dependencies=protected)
 async def delete_conversation(conversation_id: str, request: Request) -> JSONResponse:
     try:
         await request.app.state.conversation_repository.soft_delete(conversation_id)
@@ -258,7 +269,7 @@ async def delete_conversation(conversation_id: str, request: Request) -> JSONRes
     return JSONResponse(content=None, status_code=204)
 
 
-@router.get("/conversations/{conversation_id}/messages")
+@router.get("/conversations/{conversation_id}/messages", dependencies=protected)
 async def conversation_messages(
     conversation_id: str,
     request: Request,
@@ -285,7 +296,7 @@ async def conversation_messages(
     )
 
 
-@router.post("/conversations/{conversation_id}/turns", response_model=None)
+@router.post("/conversations/{conversation_id}/turns", response_model=None, dependencies=protected)
 async def conversation_turn(
     conversation_id: str, payload: TurnRequest, request: Request
 ) -> StreamingResponse | JSONResponse:
@@ -328,7 +339,7 @@ async def conversation_turn(
     )
 
 
-@router.post("/chat")
+@router.post("/chat", dependencies=protected)
 async def chat(payload: ChatRequest, request: Request) -> StreamingResponse:
     settings = request.app.state.settings
     defaults = {
@@ -353,7 +364,7 @@ async def chat(payload: ChatRequest, request: Request) -> StreamingResponse:
     )
 
 
-@router.post("/runs/{run_id}/cancel")
+@router.post("/runs/{run_id}/cancel", dependencies=protected)
 async def cancel(run_id: str, request: Request) -> JSONResponse:
     try:
         run = await request.app.state.run_registry.cancel(run_id)

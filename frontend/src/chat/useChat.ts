@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cancelRun,
+  bootstrapSession,
   ChatMessage,
   ConversationRecord,
   createConversation,
@@ -47,7 +48,7 @@ export function useChat() {
   const [conversations, setConversations] = useState<ConversationRecord[]>([]);
   const [archived, setArchived] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
-    () => routeConversationId() ?? localStorage.getItem("psych-local-conversation-id"),
+    () => routeConversationId(),
   );
   const [messageCache, setMessageCache] = useState<Record<string, ChatMessage[]>>({});
   const [runtimes, setRuntimes] = useState<Record<string, ConversationRuntime>>({});
@@ -94,6 +95,7 @@ export function useChat() {
     for (const delay of retryDelays) {
       if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
       try {
+        await bootstrapSession();
         const health = await loadHealth();
         setEngineAvailable(health.llm.status === "ok" && health.llm.model_loaded);
         void loadRuntimeInfo().then(setRuntimeInfo).catch(() => undefined);
@@ -104,7 +106,6 @@ export function useChat() {
           await refreshMessages(id);
         } else if (id) {
           setSelectedId(null);
-          localStorage.removeItem("psych-local-conversation-id");
           if (window.location.pathname.startsWith(routePrefix)) window.history.replaceState({}, "", "/");
         }
         return;
@@ -146,7 +147,6 @@ export function useChat() {
     setSettingsOpen(false);
     setSelectedId(id);
     if (id) {
-      localStorage.setItem("psych-local-conversation-id", id);
       if (push && window.location.pathname !== `${routePrefix}${encodeURIComponent(id)}`) {
         window.history.pushState({}, "", `${routePrefix}${encodeURIComponent(id)}`);
       }

@@ -18,7 +18,7 @@ from backend.app.llm.base import LLMBackend
 from backend.app.llm.llama_cpp import LlamaCppBackend
 from backend.app.runs import RunRegistry, RunRepository
 from backend.app.runtime import RuntimeOffloadService
-from backend.app.security import SecretStore, WindowsDpapiSecretStore
+from backend.app.security import LocalSessionManager, SecretStore, WindowsDpapiSecretStore
 from backend.app.stt import VoiceJobRegistry, WhisperCppBackend
 from backend.app.summaries import SummaryService
 
@@ -64,6 +64,9 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         context_builder = ContextBuilder(conversation_repository, summary_service)
         app.state.settings = resolved_settings
         app.state.secret_store = secret_store
+        app.state.local_session_manager = LocalSessionManager(
+            resolved_settings.session_timeout_seconds
+        )
         app.state.database = database
         app.state.llm_backend = resolved_backend
         app.state.stt_backend = WhisperCppBackend(
@@ -107,6 +110,13 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
     )
+
+    @application.middleware("http")
+    async def no_store_sensitive_responses(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith(("/v1/auth", "/v1/conversations", "/v1/stt", "/v1/chat", "/v1/runs")):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @application.exception_handler(RequestValidationError)
     async def validation_error_handler(

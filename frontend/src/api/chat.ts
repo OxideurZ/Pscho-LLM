@@ -1,6 +1,9 @@
 import { readSSE } from "./sse";
 import { ApiError, requestJson } from "./client";
 
+export const bootstrapSession = () =>
+  requestJson<{ status: "authenticated" }>("/v1/auth/bootstrap", { method: "POST" });
+
 export type ChatRole = "user" | "assistant";
 
 export interface ChatMessage {

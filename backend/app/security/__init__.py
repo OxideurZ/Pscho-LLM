@@ -5,6 +5,7 @@ from .secrets import (
     SecretStoreError,
     WindowsDpapiSecretStore,
 )
+from .session import LocalSessionManager, origin_is_local, require_local_session
 
 __all__ = [
     "SecretCorruptError",
@@ -12,4 +13,7 @@ __all__ = [
     "SecretStore",
     "SecretStoreError",
     "WindowsDpapiSecretStore",
+    "LocalSessionManager",
+    "origin_is_local",
+    "require_local_session",
 ]
