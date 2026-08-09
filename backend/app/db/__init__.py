@@ -1,3 +1,17 @@
-from .database import Database
+from .database import (
+    Database,
+    DatabaseConfigurationError,
+    DatabaseStatus,
+    MigrationError,
+    SchemaVersionError,
+    sqlite_connection,
+)
 
-__all__ = ["Database"]
+__all__ = [
+    "Database",
+    "DatabaseConfigurationError",
+    "DatabaseStatus",
+    "MigrationError",
+    "SchemaVersionError",
+    "sqlite_connection",
+]

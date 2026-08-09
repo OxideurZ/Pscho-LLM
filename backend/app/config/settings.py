@@ -1,3 +1,5 @@
+import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -7,6 +9,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
+def default_data_directory() -> Path:
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        return base / "PsychLocal"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "PsychLocal"
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "PsychLocal"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -14,7 +25,19 @@ class Settings(BaseSettings):
     psych_local_port: int = 8000
     llama_server_url: str = "http://127.0.0.1:8080"
     app_version: str = "0.1.0-dev"
-    database_path: Path = REPOSITORY_ROOT / "psych-local.db"
+    data_directory: Path = Field(default_factory=default_data_directory)
+    database_path: Path = Field(
+        default_factory=lambda: default_data_directory() / "data" / "app.sqlite"
+    )
+    sqlite_busy_timeout_ms: int = Field(default=30_000, ge=1)
+    session_timeout_seconds: int = Field(default=30 * 60, ge=1)
+    stream_checkpoint_seconds: float = Field(default=1.0, gt=0)
+    stream_checkpoint_characters: int = Field(default=512, ge=1)
+    context_safety_margin_tokens: int = Field(default=512, ge=0)
+    summary_budget_tokens: int = Field(default=4096, ge=256)
+    recent_raw_budget_tokens: int = Field(default=24_000, ge=256)
+    summary_prompt_id: str = "rolling_summary"
+    summary_prompt_version: str = "0.1.1"
     prompt_id: str = "conversation_system"
     prompt_version: str = "0.1.2"
     model_name: str = "Qwen3.6-35B-A3B-Q4_K_M"
