@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ConversationRecord, offloadRuntime } from "../api/chat";
 import { useChat } from "../chat/useChat";
 import { useVoiceRecorder } from "../voice/useVoiceRecorder";
+import { MemoryPanel } from "./MemoryPanel";
 
 const stateLabels = {
   idle: "Prêt",
@@ -24,6 +25,7 @@ export function ChatApp() {
   const busy = ["submitting", "preparing", "generating"].includes(chat.state);
   const [autoSendVoice, setAutoSendVoice] = useState(true);
   const [offloading, setOffloading] = useState(false);
+  const [view, setView] = useState<"chat" | "memory">(() => window.location.pathname === "/memory" ? "memory" : "chat");
   const submitVoice = useCallback(
     async (text: string, binding: { clientTurnId: string; conversationId: string }) =>
       chat.submitVoice(text, binding.clientTurnId, binding.conversationId),
@@ -56,7 +58,8 @@ export function ChatApp() {
     <main className="app-shell">
       <aside className="sidebar" aria-label="Conversations">
         <div className="brand"><span className="mark" aria-hidden="true">P</span><div><strong>Psych-local</strong><small>Local uniquement</small></div></div>
-        <button className="new-conversation" type="button" onClick={() => void chat.newConversation()}>＋ Nouvelle conversation</button>
+        <button className="new-conversation" type="button" onClick={() => { setView("chat"); void chat.newConversation(); }}>＋ Nouvelle conversation</button>
+        <button className={`memory-link ${view === "memory" ? "active" : ""}`} type="button" onClick={() => { setView("memory"); window.history.pushState({}, "", "/memory"); }}>◇ Mémoire</button>
         <div className="conversation-heading"><span>{chat.archived ? "Archives" : "Conversations"}</span><button type="button" onClick={() => void chat.changeArchive(!chat.archived)}>{chat.archived ? "Actives" : "Archives"}</button></div>
         <nav className="conversation-list" aria-busy={chat.listLoading}>
           {chat.listLoading && <p className="muted">Chargement…</p>}
@@ -67,7 +70,7 @@ export function ChatApp() {
               conversation={conversation}
               active={conversation.id === chat.selectedId}
               archived={chat.archived}
-              onSelect={() => void chat.selectConversation(conversation.id)}
+              onSelect={() => { setView("chat"); void chat.selectConversation(conversation.id); }}
               onRename={(title) => void chat.renameConversation(conversation.id, title)}
               onArchive={() => void chat.archiveConversation(conversation.id)}
             />
@@ -75,7 +78,7 @@ export function ChatApp() {
         </nav>
         <div className="sidebar-footer">
           <button className="offload-link" type="button" disabled={offloading} onClick={() => void offload()}>⏻ {offloading ? "Libération en cours…" : "Arrêter et libérer la VRAM"}</button>
-          <button className="settings-link" type="button" onClick={chat.showSettings}>⚙ Réglages</button>
+          <button className="settings-link" type="button" onClick={() => { setView("chat"); chat.showSettings(); }}>⚙ Réglages</button>
         </div>
       </aside>
 
@@ -88,7 +91,7 @@ export function ChatApp() {
         )}
         {chat.connectivity === "connected" && !chat.engineAvailable && <div className="engine-warning" role="status">Le moteur local n’est pas disponible. L’historique reste accessible.</div>}
         {offloading && <div className="offload-notice" role="status"><strong>Psych-local s’arrête.</strong> Les modèles sont déchargés de la mémoire. Relancez <code>start.ps1</code> pour reprendre.</div>}
-        {chat.settingsOpen ? <SettingsPanel runtimeInfo={chat.runtimeInfo} securityReadiness={chat.securityReadiness} engineAvailable={chat.engineAvailable} connectivity={chat.connectivity} /> : <>
+        {view === "memory" ? <MemoryPanel onOpenConversation={(id) => { setView("chat"); void chat.selectConversation(id); }} /> : chat.settingsOpen ? <SettingsPanel runtimeInfo={chat.runtimeInfo} securityReadiness={chat.securityReadiness} engineAvailable={chat.engineAvailable} connectivity={chat.connectivity} /> : <>
         <header className="chat-header">
           <div><p className="eyebrow">Discussion</p><h1>{chat.selectedId ? titleFor(chat.conversations.find((item) => item.id === chat.selectedId) ?? { title: null } as ConversationRecord) : "Bienvenue"}</h1></div>
           {chat.selectedId && <span className={`status status-${chat.state}`}><i />{stateLabels[chat.state]}</span>}
