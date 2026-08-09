@@ -18,6 +18,7 @@ from backend.app.conversations import (
 )
 from backend.app.llm.models import GenerationOptions
 from backend.app.runs.registry import RunAlreadyFinishedError, RunNotFoundError
+from backend.app.runtime import RuntimeNotManagedError
 from backend.app.stt import VoiceJobConflictError, VoiceJobNotFoundError
 from backend.app.stt.models import VoiceJob
 
@@ -106,6 +107,18 @@ async def runtime_information(request: Request) -> dict[str, Any]:
         "data_directory": str(settings.data_directory),
         "frontend_serving_mode": "fastapi-static",
     }
+
+
+@router.post("/runtime/offload", status_code=202)
+async def offload_runtime(request: Request) -> JSONResponse:
+    try:
+        request.app.state.runtime_offload_service.schedule()
+    except RuntimeNotManagedError:
+        return error_response("RUNTIME_NOT_MANAGED", False, 409)
+    return JSONResponse(
+        {"status": "shutting_down", "models": "offloading", "restart": "start.ps1"},
+        status_code=202,
+    )
 
 
 @router.get("/stt/health")

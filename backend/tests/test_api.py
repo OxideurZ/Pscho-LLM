@@ -86,6 +86,25 @@ def test_production_frontend_is_served_with_spa_fallback(tmp_path: Path) -> None
     assert health.status_code == 200
 
 
+def test_runtime_offload_endpoint_schedules_shutdown(tmp_path: Path) -> None:
+    app = create_app(settings_for(tmp_path / "runs.db"), FakeBackend())
+
+    with TestClient(app) as client:
+        scheduled: list[bool] = []
+        app.state.runtime_offload_service = type(
+            "FakeOffload", (), {"schedule": lambda _self: scheduled.append(True)}
+        )()
+        response = client.post("/v1/runtime/offload")
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "status": "shutting_down",
+        "models": "offloading",
+        "restart": "start.ps1",
+    }
+    assert scheduled == [True]
+
+
 def test_unavailable_backend_produces_sanitized_error_and_failed_run(tmp_path: Path) -> None:
     database_path = tmp_path / "runs.db"
     app = create_app(settings_for(database_path), FakeBackend("unavailable"))

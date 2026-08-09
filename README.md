@@ -14,8 +14,14 @@ cd Pscho-LLM
 
 `start.ps1` vérifie la configuration, l’intégrité du modèle, les ports et une éventuelle instance
 déjà saine. Il démarre uniquement `llama-server` et FastAPI, attend leurs health checks puis ouvre
-`http://127.0.0.1:8000`. Pour l’arrêter, utiliser `.\stop.ps1`. Aucun serveur Vite/Node n’est requis
-au runtime quotidien : FastAPI sert le build frontend.
+`http://127.0.0.1:8000`. Aucun serveur Vite/Node n’est requis au runtime quotidien : FastAPI sert le
+build frontend.
+
+Fermer l’onglet du navigateur **n’arrête pas** le modèle. Pour libérer la VRAM après utilisation,
+cliquer sur **Arrêter et libérer la VRAM** dans la barre latérale, ou exécuter `.\stop.ps1`. Ces deux
+actions arrêtent le moteur local et FastAPI, sans supprimer les conversations SQLite. Il faut ensuite
+relancer `.\start.ps1` pour reprendre. Il n’y a volontairement pas d’arrêt automatique sur inactivité,
+afin de ne pas interrompre une longue génération ou dictée.
 
 Psych-local est un environnement local de recherche conversationnelle. La Milestone B ajoute à la
 tranche locale validée en A une histoire durable : **PERSIST · ORDER · RETRY · CHECKPOINT ·
@@ -147,6 +153,7 @@ GET  /v1/health
 GET  /v1/models
 POST /v1/chat
 POST /v1/runs/{run_id}/cancel
+POST /v1/runtime/offload
 
 POST   /v1/conversations
 GET    /v1/conversations

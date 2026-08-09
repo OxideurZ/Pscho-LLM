@@ -95,6 +95,12 @@ export async function updateConversation(
 export const loadHealth = () => requestJson<HealthSnapshot>("/v1/health");
 export const loadRuntimeInfo = () => requestJson<RuntimeInfo>("/v1/runtime-info");
 
+export const offloadRuntime = () =>
+  requestJson<{ status: "shutting_down"; models: "offloading"; restart: string }>(
+    "/v1/runtime/offload",
+    { method: "POST" },
+  );
+
 export async function loadConversationMessages(conversationId: string): Promise<ChatMessage[]> {
   const body = await requestJson<{ items: ChatMessage[] }>(
     `/v1/conversations/${encodeURIComponent(conversationId)}/messages?limit=500`,

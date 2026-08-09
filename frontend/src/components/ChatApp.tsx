@@ -1,5 +1,5 @@
 import { CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import { ConversationRecord } from "../api/chat";
+import { ConversationRecord, offloadRuntime } from "../api/chat";
 import { useChat } from "../chat/useChat";
 import { useVoiceRecorder } from "../voice/useVoiceRecorder";
 
@@ -23,6 +23,7 @@ export function ChatApp() {
   const scroller = useRef<HTMLElement>(null);
   const busy = ["submitting", "preparing", "generating"].includes(chat.state);
   const [autoSendVoice, setAutoSendVoice] = useState(true);
+  const [offloading, setOffloading] = useState(false);
   const submitVoice = useCallback(
     async (text: string, binding: { clientTurnId: string; conversationId: string }) =>
       chat.submitVoice(text, binding.clientTurnId, binding.conversationId),
@@ -33,6 +34,19 @@ export function ChatApp() {
     const node = scroller.current;
     return !node || node.scrollHeight - node.scrollTop - node.clientHeight < 96;
   };
+  const offload = useCallback(async () => {
+    const confirmed = window.confirm(
+      "Arrêter Psych-local et libérer toute la mémoire GPU ? Vos conversations restent enregistrées.",
+    );
+    if (!confirmed) return;
+    setOffloading(true);
+    try {
+      await offloadRuntime();
+    } catch {
+      setOffloading(false);
+      window.alert("L’arrêt n’a pas pu être confirmé. Utilisez stop.ps1 pour libérer les modèles.");
+    }
+  }, []);
 
   useEffect(() => {
     if (canFollow()) end.current?.scrollIntoView({ behavior: chat.state === "generating" ? "auto" : "smooth" });
@@ -59,7 +73,10 @@ export function ChatApp() {
             />
           ))}
         </nav>
-        <button className="settings-link" type="button" onClick={chat.showSettings}>⚙ Réglages</button>
+        <div className="sidebar-footer">
+          <button className="offload-link" type="button" disabled={offloading} onClick={() => void offload()}>⏻ {offloading ? "Libération en cours…" : "Arrêter et libérer la VRAM"}</button>
+          <button className="settings-link" type="button" onClick={chat.showSettings}>⚙ Réglages</button>
+        </div>
       </aside>
 
       <section className="chat-pane">
@@ -70,6 +87,7 @@ export function ChatApp() {
           </div>
         )}
         {chat.connectivity === "connected" && !chat.engineAvailable && <div className="engine-warning" role="status">Le moteur local n’est pas disponible. L’historique reste accessible.</div>}
+        {offloading && <div className="offload-notice" role="status"><strong>Psych-local s’arrête.</strong> Les modèles sont déchargés de la mémoire. Relancez <code>start.ps1</code> pour reprendre.</div>}
         {chat.settingsOpen ? <SettingsPanel runtimeInfo={chat.runtimeInfo} engineAvailable={chat.engineAvailable} connectivity={chat.connectivity} /> : <>
         <header className="chat-header">
           <div><p className="eyebrow">Discussion</p><h1>{chat.selectedId ? titleFor(chat.conversations.find((item) => item.id === chat.selectedId) ?? { title: null } as ConversationRecord) : "Bienvenue"}</h1></div>
