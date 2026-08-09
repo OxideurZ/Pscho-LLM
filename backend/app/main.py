@@ -19,6 +19,7 @@ from backend.app.db.migration import EncryptedDatabaseMigrator
 from backend.app.jobs import BackgroundJobCoordinator, JobRepository
 from backend.app.llm.base import LLMBackend
 from backend.app.llm.llama_cpp import LlamaCppBackend
+from backend.app.memory import MemoryExtractor, MemoryRepository
 from backend.app.runs import RunRegistry, RunRepository
 from backend.app.runtime import RuntimeOffloadService
 from backend.app.security import LocalSessionManager, SecretStore, WindowsDpapiSecretStore
@@ -59,11 +60,6 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         await conversation_repository.reconcile_interrupted_process()
         job_repository = JobRepository(database)
         await job_repository.recover_interrupted()
-        background_jobs = BackgroundJobCoordinator(
-            job_repository,
-            idle_seconds=resolved_settings.memory_background_idle_seconds,
-        )
-        await background_jobs.start()
         database.mark_reconciliation_completed()
         registry = RunRegistry()
         run_repository = RunRepository(
@@ -71,6 +67,21 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             resolved_settings.sqlite_busy_timeout_ms,
             database_key,
         )
+        memory_repository = MemoryRepository(database)
+        memory_extractor = MemoryExtractor(
+            resolved_settings,
+            resolved_backend,
+            memory_repository,
+            run_repository,
+            REPOSITORY_ROOT,
+        )
+        background_jobs = BackgroundJobCoordinator(
+            job_repository,
+            idle_seconds=resolved_settings.memory_background_idle_seconds,
+            runner=memory_extractor.run,
+            persister=memory_extractor.persist,
+        )
+        await background_jobs.start()
         summary_service = SummaryService(
             resolved_settings,
             resolved_backend,
@@ -101,6 +112,7 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         app.state.conversation_repository = conversation_repository
         app.state.job_repository = job_repository
         app.state.background_jobs = background_jobs
+        app.state.memory_repository = memory_repository
         app.state.conversation_chat_service = ConversationChatService(
             resolved_settings,
             resolved_backend,
