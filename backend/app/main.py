@@ -132,6 +132,25 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
 
     @application.middleware("http")
     async def no_store_sensitive_responses(request: Request, call_next):
+        if resolved_settings.security_enabled:
+            host = request.headers.get("host", "").split(":", 1)[0]
+            allowed_hosts = {resolved_settings.psych_local_host, "localhost", "127.0.0.1"}
+            if host not in allowed_hosts:
+                return JSONResponse(
+                    {"error": {"code": "LOCAL_HOST_REQUIRED", "retryable": False}}, status_code=403
+                )
+            if request.method not in {"GET", "HEAD", "OPTIONS"} and request.headers.get("origin"):
+                origin = request.headers["origin"]
+                allowed_origins = {
+                    f"http://{resolved_settings.psych_local_host}:{resolved_settings.psych_local_port}",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:5173",
+                }
+                if origin not in allowed_origins:
+                    return JSONResponse(
+                        {"error": {"code": "LOCAL_ORIGIN_REQUIRED", "retryable": False}},
+                        status_code=403,
+                    )
         response = await call_next(request)
         if request.url.path.startswith(
             ("/v1/auth", "/v1/conversations", "/v1/stt", "/v1/chat", "/v1/runs")
