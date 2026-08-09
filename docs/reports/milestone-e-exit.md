@@ -16,12 +16,14 @@
 - Sensitive API responses receive `Cache-Control: no-store`.
 - `SecurityReadiness` projection and Settings display expose hard-check failures instead of advertising a false green state.
 - Secure mode is now enabled by default; compatibility tests explicitly opt into the insecure test mode.
+- Secure startup detects a v7 SQLite header and performs the validated fail-closed plaintext-to-SQLCipher migration before opening the application database.
 
 ## Evidence collected
 
 | Area | Evidence | Result |
 |---|---|---|
 | SQLCipher / migration / backup | encrypted DB, wrong-key, plaintext sqlite, migration and restore tests | PASS in elevated Windows test runs |
+| Secure startup migration | `test_secure_startup_migrates_existing_plaintext_database` | PASS in elevated Windows test run |
 | Backend regression | `pytest`: 85 passed; DPAPI tests require the approved elevated temp-directory harness | CONDITIONAL |
 | Frontend | 13 Vitest tests, TypeScript check and Vite build | PASS |
 | Lint | `ruff check backend`, `ruff format --check backend`, `git diff --check` | PASS |
