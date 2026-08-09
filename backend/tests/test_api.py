@@ -11,7 +11,11 @@ from backend.tests.fakes import FakeBackend
 
 
 def settings_for(database_path: Path) -> Settings:
-    return Settings(database_path=database_path, model_expected_sha256="a" * 64)
+    return Settings(
+        data_directory=database_path.parent / "runtime",
+        database_path=database_path,
+        model_expected_sha256="a" * 64,
+    )
 
 
 def extract_run_id(body: str) -> str:
@@ -25,11 +29,25 @@ def test_normal_generation_is_streamed_and_persisted(tmp_path: Path) -> None:
     app = create_app(settings_for(database_path), FakeBackend())
 
     with TestClient(app) as client:
+        health = client.get("/v1/health")
         response = client.post(
             "/v1/chat",
             json={"messages": [{"role": "user", "content": "Salut"}]},
         )
 
+    assert health.status_code == 200
+    assert health.json()["database"] == {
+        "status": "ready",
+        "reachable": True,
+        "schema_current": True,
+        "schema_version": 7,
+        "expected_schema_version": 7,
+        "foreign_keys": True,
+        "journal_mode": "wal",
+        "busy_timeout_ms": 30000,
+        "migrations": "current",
+        "startup_reconciliation": True,
+    }
     assert response.status_code == 200
     assert "event: run_started" in response.text
     assert 'event: delta\ndata: {"text":"Bonjour"}' in response.text

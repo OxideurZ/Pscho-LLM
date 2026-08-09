@@ -18,9 +18,11 @@ class RunRegistry:
         self._runs: dict[str, ActiveRun] = {}
         self._lock = asyncio.Lock()
 
-    async def create(self) -> ActiveRun:
-        run = ActiveRun(id=f"run_{uuid4().hex}")
+    async def create(self, run_id: str | None = None) -> ActiveRun:
+        run = ActiveRun(id=run_id or f"run_{uuid4().hex}")
         async with self._lock:
+            if run.id in self._runs:
+                raise ValueError(f"Run already registered: {run.id}")
             self._runs[run.id] = run
         return run
 

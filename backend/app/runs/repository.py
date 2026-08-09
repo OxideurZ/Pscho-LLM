@@ -5,12 +5,14 @@ from typing import Any
 
 import aiosqlite
 
+from backend.app.db import sqlite_connection
 from backend.app.runs.models import ActiveRun, RunStatus
 
 
 class RunRepository:
-    def __init__(self, database_path: Path) -> None:
+    def __init__(self, database_path: Path, busy_timeout_ms: int = 30_000) -> None:
         self.database_path = database_path
+        self.busy_timeout_ms = busy_timeout_ms
 
     async def create(
         self,
@@ -30,10 +32,12 @@ class RunRepository:
         app_git_commit: str | None,
         runtime_info: dict[str, Any],
         context_size: int,
+        run_kind: str = "chat",
     ) -> None:
         values = (
             run.id,
             run.status.value,
+            run_kind,
             model_name,
             model_sha256,
             backend_name,
@@ -50,15 +54,15 @@ class RunRepository:
             context_size,
             run.started_at.isoformat(),
         )
-        async with aiosqlite.connect(self.database_path, timeout=30) as connection:
+        async with sqlite_connection(self.database_path, self.busy_timeout_ms) as connection:
             await connection.execute(
                 """
                 INSERT INTO model_runs (
-                    id, status, model_name, model_sha256, backend_name, backend_version,
+                    id, status, run_kind, model_name, model_sha256, backend_name, backend_version,
                     backend_build, prompt_id, prompt_version, prompt_sha256,
                     generation_config_json, seed, app_version, app_git_commit,
                     runtime_info_json, context_size, started_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 values,
             )
@@ -68,7 +72,7 @@ class RunRepository:
         self, run_id: str, status: RunStatus, error_code: str | None = None
     ) -> None:
         completed_at = datetime.now(UTC).isoformat() if status.terminal else None
-        async with aiosqlite.connect(self.database_path, timeout=30) as connection:
+        async with sqlite_connection(self.database_path, self.busy_timeout_ms) as connection:
             await connection.execute(
                 "UPDATE model_runs SET status = ?, completed_at = ?, error_code = ? WHERE id = ?",
                 (status.value, completed_at, error_code, run_id),
@@ -78,7 +82,7 @@ class RunRepository:
     async def update_metrics(
         self, run_id: str, metrics: dict[str, int | float | str | bool | None]
     ) -> None:
-        async with aiosqlite.connect(self.database_path, timeout=30) as connection:
+        async with sqlite_connection(self.database_path, self.busy_timeout_ms) as connection:
             await connection.execute(
                 """
                 UPDATE model_runs SET
@@ -100,7 +104,7 @@ class RunRepository:
             await connection.commit()
 
     async def get(self, run_id: str) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.database_path, timeout=30) as connection:
+        async with sqlite_connection(self.database_path, self.busy_timeout_ms) as connection:
             connection.row_factory = aiosqlite.Row
             cursor = await connection.execute("SELECT * FROM model_runs WHERE id = ?", (run_id,))
             row = await cursor.fetchone()

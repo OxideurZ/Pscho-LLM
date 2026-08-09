@@ -12,6 +12,7 @@ from backend.app.llm.errors import (
 )
 from backend.app.llm.models import LLMMessage, LLMRole
 from backend.app.runs.models import ActiveRun
+from backend.app.summaries import RollingSummary
 
 
 @pytest.mark.asyncio
@@ -76,6 +77,41 @@ async def test_llama_backend_maps_connection_failure() -> None:
                 ActiveRun("run_test"),
             ):
                 pass
+
+
+@pytest.mark.asyncio
+async def test_structured_generation_uses_json_schema_and_validates_response() -> None:
+    captured: dict[str, object] = {}
+    summary = {
+        "conversation_progression": ["L'utilisateur rapporte X."],
+        "user_stated_facts": ["X"],
+        "user_interpretations": [],
+        "assistant_proposals": [],
+        "topics_discussed": ["X"],
+        "open_questions": [],
+        "decisions_or_actions": [],
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": json.dumps(summary)}}]},
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://llama"
+    ) as client:
+        result = await LlamaCppBackend(Settings(), client).generate_structured(
+            [LLMMessage(role=LLMRole.USER, content="Source")], RollingSummary
+        )
+
+    assert result == RollingSummary.model_validate(summary)
+    assert captured["stream"] is False
+    response_format = captured["response_format"]
+    assert isinstance(response_format, dict)
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
 
 
 @pytest.mark.asyncio

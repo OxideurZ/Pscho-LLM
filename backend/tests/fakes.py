@@ -18,6 +18,7 @@ class FakeBackend:
     def __init__(self, mode: str = "success") -> None:
         self.mode = mode
         self.closed = False
+        self.requests: list[list[LLMMessage]] = []
 
     async def chat_stream(
         self,
@@ -25,6 +26,7 @@ class FakeBackend:
         options: GenerationOptions,
         run: ActiveRun,
     ) -> AsyncIterator[LLMStreamEvent]:
+        self.requests.append(messages)
         if self.mode == "unavailable":
             raise LLMBackendUnavailable("offline")
         yield LLMStreamEvent(type="generation_started")

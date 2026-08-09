@@ -160,7 +160,47 @@ class LlamaCppBackend:
     async def generate_structured(
         self, messages: list[LLMMessage], schema: type[BaseModel]
     ) -> BaseModel:
-        raise NotImplementedError("Structured generation is reserved for a later milestone")
+        owns_client = self._client is None
+        client = self._client or httpx.AsyncClient(
+            base_url=self.settings.llama_server_url,
+            timeout=httpx.Timeout(connect=5, read=300, write=10, pool=5),
+        )
+        try:
+            response = await client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": self.settings.model_name,
+                    "messages": [message.model_dump(mode="json") for message in messages],
+                    "stream": False,
+                    "temperature": 0,
+                    "seed": self.settings.default_seed,
+                    "max_tokens": self.settings.summary_budget_tokens,
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": schema.__name__,
+                            "strict": True,
+                            "schema": schema.model_json_schema(),
+                        },
+                    },
+                },
+            )
+            response.raise_for_status()
+            body = response.json()
+            content = body["choices"][0]["message"]["content"]
+            return schema.model_validate_json(content)
+        except httpx.ConnectError as error:
+            raise LLMBackendUnavailable("llama-server is unavailable") from error
+        except httpx.TimeoutException as error:
+            raise LLMBackendTimeout("llama-server timed out") from error
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+            raise LLMBackendProtocolError(
+                "llama-server returned invalid structured data"
+            ) from error
+        finally:
+            if owns_client:
+                with suppress(Exception):
+                    await client.aclose()
 
     async def health(self) -> HealthStatus:
         owns_client = self._client is None
