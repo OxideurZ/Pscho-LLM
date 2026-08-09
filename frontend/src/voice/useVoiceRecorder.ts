@@ -35,21 +35,33 @@ export function useVoiceRecorder(
   const [state, setState] = useState<VoiceState>("idle");
   const [preview, setPreview] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [levels, setLevels] = useState<number[]>(() => Array.from({ length: 20 }, () => 0.08));
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const parts = useRef<Blob[]>([]);
   const binding = useRef<VoiceBinding | null>(null);
   const timeout = useRef<number | null>(null);
+  const elapsedTimer = useRef<number | null>(null);
+  const animationFrame = useRef<number | null>(null);
+  const visualContext = useRef<AudioContext | null>(null);
   const discardRecording = useRef(false);
   const previewEdited = useRef(false);
 
   const release = useCallback(() => {
     if (timeout.current !== null) window.clearTimeout(timeout.current);
+    if (elapsedTimer.current !== null) window.clearInterval(elapsedTimer.current);
+    if (animationFrame.current !== null) window.cancelAnimationFrame(animationFrame.current);
     timeout.current = null;
+    elapsedTimer.current = null;
+    animationFrame.current = null;
+    if (visualContext.current) void visualContext.current.close();
+    visualContext.current = null;
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
     recorder.current = null;
     parts.current = [];
+    setLevels(Array.from({ length: 20 }, () => 0.08));
   }, []);
 
   const poll = useCallback(async (voiceInputId: string) => {
@@ -116,9 +128,9 @@ export function useVoiceRecorder(
         await finalizeVoiceJob(frozen.voiceInputId);
         setState("transcribing");
         await poll(frozen.voiceInputId);
-      } catch {
+      } catch (caught) {
         release();
-        setError("STT_FAILED");
+        setError(errorCode(caught, "STT_FAILED"));
         setState("error");
       }
     },
@@ -144,8 +156,14 @@ export function useVoiceRecorder(
       };
       binding.current = frozen;
       try {
-        stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-        recorder.current = new MediaRecorder(stream.current, { mimeType: "audio/webm" });
+        stream.current = await navigator.mediaDevices.getUserMedia({
+          audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true },
+        });
+        startVisualiser(stream.current, visualContext, animationFrame, setLevels);
+        const preferredMime = "audio/webm;codecs=opus";
+        recorder.current = MediaRecorder.isTypeSupported(preferredMime)
+          ? new MediaRecorder(stream.current, { mimeType: preferredMime })
+          : new MediaRecorder(stream.current);
         parts.current = [];
         recorder.current.ondataavailable = (event) => {
           if (event.data.size) parts.current.push(event.data);
@@ -159,10 +177,16 @@ export function useVoiceRecorder(
         };
         recorder.current.start(1_000);
         setState("recording");
+        const startedAt = Date.now();
+        setElapsedSeconds(0);
+        elapsedTimer.current = window.setInterval(
+          () => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1_000)),
+          1_000,
+        );
         timeout.current = window.setTimeout(stop, MAX_RECORDING_MS);
-      } catch {
+      } catch (caught) {
         release();
-        setError("MICROPHONE_UNAVAILABLE");
+        setError(errorCode(caught, "MICROPHONE_UNAVAILABLE"));
         setState("error");
       }
     },
@@ -214,7 +238,56 @@ export function useVoiceRecorder(
     window.addEventListener("pagehide", abandon);
     return () => window.removeEventListener("pagehide", abandon);
   }, [release, state]);
-  return { state, preview, setPreview: updatePreview, error, start, stop, cancel, send };
+  return {
+    state,
+    preview,
+    setPreview: updatePreview,
+    error,
+    levels,
+    elapsedSeconds,
+    start,
+    stop,
+    cancel,
+    send,
+  };
+}
+
+function startVisualiser(
+  mediaStream: MediaStream,
+  contextRef: { current: AudioContext | null },
+  frameRef: { current: number | null },
+  setLevels: (levels: number[]) => void,
+) {
+  const context = new AudioContext();
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 64;
+  context.createMediaStreamSource(mediaStream).connect(analyser);
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  contextRef.current = context;
+  const paint = () => {
+    analyser.getByteFrequencyData(data);
+    const bars = Array.from({ length: 20 }, (_unused, index) => {
+      const start = Math.floor((index * data.length) / 20);
+      const end = Math.max(start + 1, Math.floor(((index + 1) * data.length) / 20));
+      const average = data.slice(start, end).reduce((sum, value) => sum + value, 0) / (end - start);
+      return Math.max(0.08, Math.min(1, average / 180));
+    });
+    setLevels(bars);
+    frameRef.current = window.requestAnimationFrame(paint);
+  };
+  paint();
+}
+
+function errorCode(error: unknown, fallback: string): string {
+  if (error instanceof DOMException) {
+    if (error.name === "NotAllowedError") return "MIC_PERMISSION_DENIED";
+    if (error.name === "NotFoundError") return "MIC_UNAVAILABLE";
+  }
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string") return code;
+  }
+  return fallback;
 }
 
 async function mediaPartsToWav(parts: Blob[]): Promise<Blob> {
