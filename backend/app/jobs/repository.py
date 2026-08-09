@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -120,19 +121,53 @@ class JobRepository:
         return JobRecord.model_validate(dict(claimed))
 
     async def complete(self, job_id: str, execution_token: str) -> bool:
+        async def no_result(_connection: aiosqlite.Connection) -> None:
+            return None
+
+        return await self.commit_result(job_id, execution_token, no_result)
+
+    async def commit_result(
+        self,
+        job_id: str,
+        execution_token: str,
+        persist: Callable[[aiosqlite.Connection], Awaitable[None]],
+    ) -> bool:
+        """Atomically validate the lease, persist output, and complete the job."""
+
         now = datetime.now(UTC).isoformat()
         async with self.database.connect() as connection:
-            cursor = await connection.execute(
-                """
-                UPDATE jobs
-                SET status = 'complete', completed_at = ?, execution_token = NULL,
-                    error_code = NULL, updated_at = ?
-                WHERE id = ? AND status = 'running' AND execution_token = ?
-                """,
-                (now, now, job_id, execution_token),
-            )
-            await connection.commit()
-        return cursor.rowcount == 1
+            connection.row_factory = aiosqlite.Row
+            await connection.execute("BEGIN IMMEDIATE")
+            try:
+                lease = await (
+                    await connection.execute(
+                        """
+                        SELECT id FROM jobs
+                        WHERE id = ? AND status = 'running' AND execution_token = ?
+                        """,
+                        (job_id, execution_token),
+                    )
+                ).fetchone()
+                if lease is None:
+                    await connection.commit()
+                    return False
+                await persist(connection)
+                cursor = await connection.execute(
+                    """
+                    UPDATE jobs
+                    SET status = 'complete', completed_at = ?, execution_token = NULL,
+                        error_code = NULL, updated_at = ?
+                    WHERE id = ? AND status = 'running' AND execution_token = ?
+                    """,
+                    (now, now, job_id, execution_token),
+                )
+                if cursor.rowcount != 1:
+                    raise RuntimeError("job lease changed inside result transaction")
+                await connection.commit()
+                return True
+            except Exception:
+                await connection.rollback()
+                raise
 
     async def fail(self, job_id: str, execution_token: str, error_code: str) -> bool:
         now = datetime.now(UTC).isoformat()

@@ -159,6 +159,7 @@ async def stt_model(request: Request) -> dict[str, Any]:
 
 @router.post("/stt/jobs", status_code=201, dependencies=protected)
 async def create_voice_job(payload: VoiceJobCreateRequest, request: Request) -> JSONResponse:
+    await request.app.state.background_jobs.note_interactive_activity()
     try:
         await request.app.state.conversation_repository.get(payload.conversation_id)
         job = await request.app.state.voice_job_registry.create(
@@ -313,6 +314,7 @@ async def conversation_messages(
 async def conversation_turn(
     conversation_id: str, payload: TurnRequest, request: Request
 ) -> StreamingResponse | JSONResponse:
+    await request.app.state.background_jobs.note_interactive_activity()
     settings = request.app.state.settings
     defaults = {
         "temperature": settings.default_temperature,
@@ -354,6 +356,7 @@ async def conversation_turn(
 
 @router.post("/chat", dependencies=protected)
 async def chat(payload: ChatRequest, request: Request) -> StreamingResponse:
+    await request.app.state.background_jobs.note_interactive_activity()
     settings = request.app.state.settings
     defaults = {
         "temperature": settings.default_temperature,
