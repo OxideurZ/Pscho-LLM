@@ -180,14 +180,34 @@ class Database:
                         f"VALUES ({migration.version}, '{name}', '{checksum}', '{applied_at}');\n"
                         "COMMIT;"
                     )
+                    # Migration 009 rebuilds model_runs while messages already reference it.
+                    # SQLite/SQLCipher cannot defer DROP TABLE foreign-key checks for this pattern.
+                    # Keep the historical migration checksum immutable and scope this compatibility
+                    # mode to that one rebuild, followed by an explicit integrity check.
+                    legacy_rebuild = migration.name == "model_run_memory_kinds"
+                    if legacy_rebuild:
+                        await connection.execute("PRAGMA foreign_keys = OFF")
                     try:
                         await connection.executescript(atomic_script)
+                        if legacy_rebuild:
+                            await connection.execute("PRAGMA foreign_keys = ON")
+                            violations = await (
+                                await connection.execute("PRAGMA foreign_key_check")
+                            ).fetchall()
+                            if violations:
+                                raise aiosqlite.IntegrityError(
+                                    "Foreign key check failed after rebuild"
+                                )
                     except aiosqlite.Error as error:
                         with suppress(aiosqlite.Error):
                             await connection.rollback()
                         raise MigrationError(
                             f"Migration {migration.version:03d}_{migration.name} failed"
                         ) from error
+                    finally:
+                        if legacy_rebuild:
+                            with suppress(aiosqlite.Error):
+                                await connection.execute("PRAGMA foreign_keys = ON")
                 self.schema_version = self.expected_schema_version
                 self.migration_status = "current"
         except Exception:

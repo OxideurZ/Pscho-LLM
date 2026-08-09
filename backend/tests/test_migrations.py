@@ -104,6 +104,59 @@ async def test_existing_milestone_a_database_migrates_without_losing_runs(
 
 
 @pytest.mark.asyncio
+async def test_model_run_rebuild_migrates_existing_message_references(tmp_path: Path) -> None:
+    legacy_migrations = copy_migrations(tmp_path / "legacy-migrations")
+    for migration in legacy_migrations.glob("00[9-9]_*.sql"):
+        migration.unlink()
+    for migration in legacy_migrations.glob("01[0-2]_*.sql"):
+        migration.unlink()
+    path = tmp_path / "legacy.sqlite"
+    legacy_database = Database(path, legacy_migrations)
+    await legacy_database.migrate()
+    now = "2026-08-09T00:00:00+00:00"
+    async with legacy_database.connect() as connection:
+        await connection.execute(
+            """
+            INSERT INTO model_runs(
+                id, status, model_name, model_sha256, backend_name, backend_version,
+                prompt_id, prompt_version, prompt_sha256, generation_config_json, app_version,
+                started_at
+            ) VALUES ('run_legacy', 'complete', 'model', ?, 'llama.cpp', 'b9637',
+                      'conversation_system', '0.1.2', ?, '{}', 'test', ?)
+            """,
+            ("a" * 64, "b" * 64, now),
+        )
+        await connection.execute(
+            """
+            INSERT INTO conversations(id, next_sequence_no, created_at, updated_at)
+            VALUES ('conv_legacy', 2, ?, ?)
+            """,
+            (now, now),
+        )
+        await connection.execute(
+            """
+            INSERT INTO messages(
+                id, conversation_id, sequence_no, role, content, input_type, status,
+                created_at, updated_at, model_run_id
+            ) VALUES ('msg_legacy', 'conv_legacy', 1, 'assistant', 'Réponse', 'generated',
+                      'complete', ?, ?, 'run_legacy')
+            """,
+            (now, now),
+        )
+        await connection.commit()
+
+    database = Database(path, REPOSITORY_ROOT / "migrations")
+    await database.migrate()
+    async with database.connect() as connection:
+        row = await (
+            await connection.execute("SELECT model_run_id FROM messages WHERE id = 'msg_legacy'")
+        ).fetchone()
+        violations = await (await connection.execute("PRAGMA foreign_key_check")).fetchall()
+    assert row == ("run_legacy",)
+    assert violations == []
+
+
+@pytest.mark.asyncio
 async def test_changed_applied_migration_checksum_refuses_startup(tmp_path: Path) -> None:
     migrations = copy_migrations(tmp_path / "migrations")
     database = Database(tmp_path / "app.sqlite", migrations)
