@@ -50,7 +50,7 @@ class RunRepository:
             context_size,
             run.started_at.isoformat(),
         )
-        async with aiosqlite.connect(self.database_path) as connection:
+        async with aiosqlite.connect(self.database_path, timeout=30) as connection:
             await connection.execute(
                 """
                 INSERT INTO model_runs (
@@ -68,7 +68,7 @@ class RunRepository:
         self, run_id: str, status: RunStatus, error_code: str | None = None
     ) -> None:
         completed_at = datetime.now(UTC).isoformat() if status.terminal else None
-        async with aiosqlite.connect(self.database_path) as connection:
+        async with aiosqlite.connect(self.database_path, timeout=30) as connection:
             await connection.execute(
                 "UPDATE model_runs SET status = ?, completed_at = ?, error_code = ? WHERE id = ?",
                 (status.value, completed_at, error_code, run_id),
@@ -76,7 +76,7 @@ class RunRepository:
             await connection.commit()
 
     async def update_metrics(self, run_id: str, metrics: dict[str, int | float | None]) -> None:
-        async with aiosqlite.connect(self.database_path) as connection:
+        async with aiosqlite.connect(self.database_path, timeout=30) as connection:
             await connection.execute(
                 """
                 UPDATE model_runs SET
@@ -98,7 +98,7 @@ class RunRepository:
             await connection.commit()
 
     async def get(self, run_id: str) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.database_path) as connection:
+        async with aiosqlite.connect(self.database_path, timeout=30) as connection:
             connection.row_factory = aiosqlite.Row
             cursor = await connection.execute("SELECT * FROM model_runs WHERE id = ?", (run_id,))
             row = await cursor.fetchone()

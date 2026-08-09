@@ -5,7 +5,11 @@ import pytest
 
 from backend.app.config import Settings
 from backend.app.llm import GenerationOptions, LlamaCppBackend
-from backend.app.llm.errors import LLMBackendUnavailable
+from backend.app.llm.errors import (
+    LLMBackendProtocolError,
+    LLMBackendTimeout,
+    LLMBackendUnavailable,
+)
 from backend.app.llm.models import LLMMessage, LLMRole
 from backend.app.runs.models import ActiveRun
 
@@ -89,3 +93,32 @@ async def test_health_recovers_without_recreating_backend() -> None:
     assert first.status == "unavailable"
     assert second.status == "ok"
     assert second.model_loaded
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("upstream_error", "expected"),
+    [
+        (httpx.ReadTimeout("slow"), LLMBackendTimeout),
+        (httpx.DecodingError("bad stream"), LLMBackendProtocolError),
+    ],
+)
+async def test_transport_errors_are_mapped(
+    upstream_error: Exception, expected: type[Exception]
+) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if isinstance(upstream_error, httpx.ReadTimeout):
+            raise httpx.ReadTimeout("slow", request=request)
+        raise upstream_error
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://llama"
+    ) as client:
+        backend = LlamaCppBackend(Settings(), client)
+        with pytest.raises(expected):
+            async for _ in backend.chat_stream(
+                [LLMMessage(role=LLMRole.USER, content="Salut")],
+                GenerationOptions(),
+                ActiveRun("run_test"),
+            ):
+                pass

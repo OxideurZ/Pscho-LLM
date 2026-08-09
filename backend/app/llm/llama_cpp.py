@@ -131,6 +131,8 @@ class LlamaCppBackend:
             if error.response.status_code >= 500:
                 raise LLMBackendUnavailable("llama-server returned an error") from error
             raise LLMBackendProtocolError("llama-server rejected the request") from error
+        except (httpx.DecodingError, httpx.RemoteProtocolError) as error:
+            raise LLMBackendProtocolError("llama-server returned an invalid stream") from error
         except httpx.HTTPError as error:
             raise LLMError("llama-server stream failed") from error
         finally:

@@ -53,3 +53,32 @@ async def test_cancellation_closes_producer_and_emits_terminal_event(tmp_path: P
     assert await RunRepository(path).get(run_id) is not None
     assert (await RunRepository(path).get(run_id))["status"] == "cancelled"
     await stream.aclose()
+
+
+@pytest.mark.asyncio
+async def test_client_disconnect_cancels_run_and_cleans_registry(tmp_path: Path) -> None:
+    path = tmp_path / "runs.db"
+    await Database(path, REPOSITORY_ROOT / "migrations").migrate()
+    registry = RunRegistry()
+    service = ChatService(
+        Settings(database_path=path),
+        FakeBackend("slow"),
+        registry,
+        RunRepository(path),
+        REPOSITORY_ROOT,
+    )
+
+    async def disconnected() -> bool:
+        return True
+
+    stream = service.stream(
+        [LLMMessage(role=LLMRole.USER, content="Déconnexion")],
+        GenerationOptions(),
+        disconnected,
+    )
+    run_id = event_data(await anext(stream))["run_id"]
+    assert (await anext(stream)).startswith("event: cancelled")
+    await stream.aclose()
+
+    assert len(registry) == 0
+    assert (await RunRepository(path).get(run_id))["status"] == "cancelled"

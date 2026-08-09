@@ -10,14 +10,16 @@ class Database:
 
     async def migrate(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        async with aiosqlite.connect(self.path) as connection:
+        async with aiosqlite.connect(self.path, timeout=30) as connection:
+            await connection.execute("PRAGMA journal_mode=WAL")
+            await connection.execute("PRAGMA busy_timeout=30000")
             for migration in sorted(self.migrations_dir.glob("*.sql")):
                 await connection.executescript(migration.read_text(encoding="utf-8"))
             await connection.commit()
 
     async def health(self) -> bool:
         try:
-            async with aiosqlite.connect(self.path) as connection:
+            async with aiosqlite.connect(self.path, timeout=30) as connection:
                 await connection.execute("SELECT 1")
             return True
         except aiosqlite.Error:
