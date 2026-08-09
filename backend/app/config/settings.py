@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     default_max_tokens: int = Field(default=800, gt=0)
     default_seed: int = 42
     context_size: int = 32768
+    backend_accelerator: str = "unknown"
+    gpu_name: str = "unknown"
+    gpu_vram_mb: int | None = None
 
 
 @lru_cache
