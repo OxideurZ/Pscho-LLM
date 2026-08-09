@@ -78,6 +78,11 @@ export function useVoiceRecorder(
     const frozen = binding.current;
     if (!frozen || !preview.trim() || state !== "transcript_ready") return;
     await onSend(preview.trim(), frozen);
+    try {
+      await cancelVoiceJob(frozen.voiceInputId);
+    } catch {
+      // The conversation commit succeeded; the backend still abandons VoiceJobs on restart.
+    }
     setPreview("");
     binding.current = null;
     setState("idle");
@@ -197,7 +202,10 @@ export function useVoiceRecorder(
     const abandon = () => {
       const frozen = binding.current;
       if (frozen && (state === "transcribing" || state === "transcript_ready")) {
-        void cancelVoiceJob(frozen.voiceInputId);
+        const endpoint = `/v1/stt/jobs/${encodeURIComponent(frozen.voiceInputId)}/cancel`;
+        if (!navigator.sendBeacon?.(endpoint, new Blob())) {
+          void cancelVoiceJob(frozen.voiceInputId);
+        }
       }
       discardRecording.current = true;
       recorder.current?.stop();

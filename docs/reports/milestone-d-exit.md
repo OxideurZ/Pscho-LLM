@@ -31,8 +31,9 @@ and 3-minute RTF of 0.0378 (versus 0.0905 for faster-whisper).
 - Normalization: browser Web Audio decode followed by offline mono 16 kHz PCM WAV rendering.
 - Transport: bounded WAV chunks (1 MiB) to an ephemeral backend directory.
 - The backend accepts one active transcription; competing STT work is cleanly rejected.
-- Audio is deleted at transcript completion, cancellation, error and backend shutdown. It is never
-  stored in SQLite, backup, logs or Git.
+- Audio is deleted at transcript completion, cancellation, error and backend shutdown. The ephemeral
+  transcript is also discarded after a successful voice turn or preview cancellation. Neither is
+  stored in SQLite, backup, logs or Git before `create_turn()`.
 - Voice identity is frozen at recording start: `voice_input_id`, `conversation_id`,
   `client_turn_id`. A later navigation cannot redirect its turn.
 - `transcript_ready` provides an editable preview. Auto-send waits 1.5 seconds and is cancelled by
