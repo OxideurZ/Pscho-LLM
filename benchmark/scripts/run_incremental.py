@@ -111,6 +111,7 @@ def request_controlled(
     response = client.post(
         f"{llama_url}/v1/chat/completions",
         json={
+            "model": Settings().model_name,
             "messages": [{"role": "system", "content": prompt}, *messages],
             "temperature": 0.7,
             "top_p": 0.9,

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0-dev"
     database_path: Path = REPOSITORY_ROOT / "psych-local.db"
     prompt_id: str = "conversation_system"
-    prompt_version: str = "0.1.1"
+    prompt_version: str = "0.1.2"
     model_name: str = "Qwen3.6-35B-A3B-Q4_K_M"
     model_path: Path = REPOSITORY_ROOT / "models/Qwen3.6-35B-A3B-Q4_K_M.gguf"
     model_expected_sha256: str = "671e47e0ec53c665d048b98c3ecbfd5236b5ca9c3e02ed19fc8f81f7b85140c7"

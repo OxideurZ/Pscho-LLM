@@ -88,7 +88,7 @@ Une divergence retourne un code non nul et bloque le runner de benchmark. Démar
 moteur manuellement, sur l’interface locale uniquement :
 
 ```console
-llama-server -m models/Qwen3.6-35B-A3B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 32768 --parallel 1 --jinja --reasoning off --metrics
+llama-server -m models/Qwen3.6-35B-A3B-Q4_K_M.gguf --alias Qwen3.6-35B-A3B-Q4_K_M --host 127.0.0.1 --port 8080 -c 32768 --parallel 1 --jinja --reasoning off --metrics
 ```
 
 Valider `/health`, `/v1/models` et `/v1/chat/completions` directement sur le moteur avant de tester
@@ -168,7 +168,7 @@ Le premier rapport matériel contrôlé est disponible dans
 | `PSYCH_LOCAL_HOST` / `PORT` | `127.0.0.1` / `8000` | écoute FastAPI |
 | `LLAMA_SERVER_URL` | `http://127.0.0.1:8080` | moteur indépendant |
 | `DATABASE_PATH` | `psych-local.db` | runs techniques uniquement |
-| `PROMPT_ID` / `VERSION` | `conversation_system` / `0.1.1` | prompt versionné et hashé |
+| `PROMPT_ID` / `VERSION` | `conversation_system` / `0.1.2` | prompt versionné et hashé |
 | `MODEL_NAME` / `PATH` | baseline Qwen | identification locale |
 | `MODEL_EXPECTED_SHA256` | hash canonique | garde-fou benchmark |
 | `LLAMA_CPP_VERSION` / `BUILD` | `b9637` / commit épinglé | identité du backend |

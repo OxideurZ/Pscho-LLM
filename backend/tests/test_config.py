@@ -25,6 +25,16 @@ def test_prompt_v011_is_a_versioned_style_only_revision() -> None:
     assert "significative à la fois" in revised.content
 
 
+def test_prompt_v012_tightens_style_without_dropping_epistemic_rules() -> None:
+    revised = load_prompt(REPOSITORY_ROOT, "conversation_system", "0.1.2")
+
+    assert "Distingue clairement les faits" in revised.content
+    assert "N'établis pas de diagnostic" in revised.content
+    assert "un à trois" in revised.content
+    assert "paragraphes courts" in revised.content
+    assert "relève doucement la tension" in revised.content
+
+
 def test_generation_options_are_stable_and_do_not_share_stop_lists() -> None:
     first = GenerationOptions(seed=42)
     second = GenerationOptions(seed=42)
