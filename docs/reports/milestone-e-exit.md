@@ -42,4 +42,4 @@ The threat model excludes same-user malware, administrator compromise, kernel co
 
 ## Next authorized validation
 
-Run the material Windows attack matrix from the reference account and a separate standard account, then update this report with the command output and change the decision to GO only if every hard gate passes. No Milestone F authorization or Milestone E closure is claimed by this report.
+Run `scripts/validate_milestone_e_security.py --output milestone-e-security-check.json` from the reference account, then repeat the DB/key/API checks from a separate standard account. Update this report with the command output and change the decision to GO only if every hard gate passes. No Milestone F authorization or Milestone E closure is claimed by this report.
