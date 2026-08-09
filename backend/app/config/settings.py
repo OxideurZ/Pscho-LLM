@@ -58,6 +58,20 @@ class Settings(BaseSettings):
     gpu_vram_mb: int | None = None
     launcher_engine_timeout_seconds: int = Field(default=120, ge=1)
     launcher_backend_timeout_seconds: int = Field(default=45, ge=1)
+    max_recording_duration_seconds: int = Field(default=15 * 60, ge=1, le=15 * 60)
+    max_voice_audio_bytes: int = Field(default=128 * 1024 * 1024, ge=1)
+    voice_silence_rms_threshold: int = Field(default=80, ge=0)
+    whisper_cpp_path: Path = (
+        REPOSITORY_ROOT / "tools" / "whisper.cpp-v1.9.2-cublas-12.4" / "Release" / "whisper-cli.exe"
+    )
+    whisper_model_path: Path = Field(
+        default_factory=lambda: (
+            default_data_directory()
+            / "stt"
+            / "whisper.cpp-large-v3-turbo"
+            / "ggml-large-v3-turbo.bin"
+        )
+    )
 
 
 @lru_cache

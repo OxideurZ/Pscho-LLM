@@ -29,5 +29,11 @@ class ConversationUpdateRequest(BaseModel):
 class TurnRequest(BaseModel):
     client_turn_id: UUID
     content: str = Field(min_length=1, max_length=500_000)
-    input_type: Literal["text"] = "text"
+    input_type: Literal["text", "voice"] = "text"
     generation: GenerationOptions = Field(default_factory=GenerationOptions)
+
+
+class VoiceJobCreateRequest(BaseModel):
+    voice_input_id: UUID
+    conversation_id: str = Field(min_length=1, max_length=100)
+    client_turn_id: UUID

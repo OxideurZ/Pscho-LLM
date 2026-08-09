@@ -17,6 +17,7 @@ from backend.app.db import Database
 from backend.app.llm.base import LLMBackend
 from backend.app.llm.llama_cpp import LlamaCppBackend
 from backend.app.runs import RunRegistry, RunRepository
+from backend.app.stt import VoiceJobRegistry, WhisperCppBackend
 from backend.app.summaries import SummaryService
 
 
@@ -54,6 +55,10 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         app.state.settings = resolved_settings
         app.state.database = database
         app.state.llm_backend = resolved_backend
+        app.state.stt_backend = WhisperCppBackend(
+            resolved_settings.whisper_cpp_path, resolved_settings.whisper_model_path
+        )
+        app.state.voice_job_registry = VoiceJobRegistry(resolved_settings, app.state.stt_backend)
         app.state.run_registry = registry
         app.state.backup_service = BackupService(
             resolved_settings.database_path,

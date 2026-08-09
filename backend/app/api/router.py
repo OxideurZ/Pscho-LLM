@@ -8,6 +8,7 @@ from backend.app.api.schemas import (
     ConversationCreateRequest,
     ConversationUpdateRequest,
     TurnRequest,
+    VoiceJobCreateRequest,
 )
 from backend.app.config.metadata import runtime_info
 from backend.app.conversations import (
@@ -17,6 +18,8 @@ from backend.app.conversations import (
 )
 from backend.app.llm.models import GenerationOptions
 from backend.app.runs.registry import RunAlreadyFinishedError, RunNotFoundError
+from backend.app.stt import VoiceJobConflictError, VoiceJobNotFoundError
+from backend.app.stt.models import VoiceJob
 
 router = APIRouter(prefix="/v1")
 
@@ -32,6 +35,30 @@ def conversation_error(error: Exception) -> JSONResponse:
         return error_response("CONVERSATION_DELETED", False, 410)
     if isinstance(error, ConversationBusyError):
         return error_response("CONVERSATION_BUSY", True, 409)
+    raise error
+
+
+def voice_job_payload(job: VoiceJob) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "voice_input_id": str(job.voice_input_id),
+        "conversation_id": job.conversation_id,
+        "client_turn_id": str(job.client_turn_id),
+        "status": job.status.value,
+        "duration_ms": job.duration_ms,
+        "error_code": job.error_code,
+    }
+    if job.status.value == "transcript_ready":
+        payload["transcript"] = job.transcript
+    return payload
+
+
+def voice_error(error: Exception) -> JSONResponse:
+    if isinstance(error, VoiceJobNotFoundError):
+        return error_response("VOICE_JOB_NOT_FOUND", False, 404)
+    if isinstance(error, VoiceJobConflictError):
+        return error_response("VOICE_JOB_CONFLICT", True, 409)
+    if isinstance(error, ValueError):
+        return error_response(str(error), False, 422)
     raise error
 
 
@@ -79,6 +106,80 @@ async def runtime_information(request: Request) -> dict[str, Any]:
         "data_directory": str(settings.data_directory),
         "frontend_serving_mode": "fastapi-static",
     }
+
+
+@router.get("/stt/health")
+async def stt_health(request: Request) -> dict[str, Any]:
+    model = await request.app.state.stt_backend.health()
+    return {"status": "healthy" if model.available else "unavailable", **model.__dict__}
+
+
+@router.get("/stt/model")
+async def stt_model(request: Request) -> dict[str, Any]:
+    model = await request.app.state.stt_backend.health()
+    return model.__dict__
+
+
+@router.post("/stt/jobs", status_code=201)
+async def create_voice_job(payload: VoiceJobCreateRequest, request: Request) -> JSONResponse:
+    try:
+        job = await request.app.state.voice_job_registry.create(
+            payload.voice_input_id, payload.conversation_id, payload.client_turn_id
+        )
+    except (VoiceJobConflictError, ValueError) as error:
+        return voice_error(error)
+    return JSONResponse(voice_job_payload(job), status_code=201)
+
+
+@router.post("/stt/jobs/{voice_input_id}/chunks", status_code=204)
+async def append_voice_chunk(voice_input_id: str, request: Request) -> JSONResponse:
+    try:
+        from uuid import UUID
+
+        content_length = int(request.headers.get("content-length", "0"))
+        if content_length > request.app.state.settings.max_voice_audio_bytes:
+            return error_response("VOICE_AUDIO_TOO_LARGE", False, 413)
+        job = await request.app.state.voice_job_registry.append_chunk(
+            UUID(voice_input_id), await request.body()
+        )
+    except (VoiceJobNotFoundError, VoiceJobConflictError, ValueError) as error:
+        return voice_error(error)
+    return JSONResponse(
+        content=None, status_code=204, headers={"X-Voice-Bytes": str(job.audio_bytes)}
+    )
+
+
+@router.post("/stt/jobs/{voice_input_id}/finalize", status_code=202)
+async def finalize_voice_job(voice_input_id: str, request: Request) -> JSONResponse:
+    try:
+        from uuid import UUID
+
+        job = await request.app.state.voice_job_registry.finalize(UUID(voice_input_id))
+    except (VoiceJobNotFoundError, VoiceJobConflictError, ValueError) as error:
+        return voice_error(error)
+    return JSONResponse(voice_job_payload(job), status_code=202)
+
+
+@router.get("/stt/jobs/{voice_input_id}")
+async def get_voice_job(voice_input_id: str, request: Request) -> JSONResponse:
+    try:
+        from uuid import UUID
+
+        job = await request.app.state.voice_job_registry.get(UUID(voice_input_id))
+    except (VoiceJobNotFoundError, ValueError) as error:
+        return voice_error(error)
+    return JSONResponse(voice_job_payload(job))
+
+
+@router.post("/stt/jobs/{voice_input_id}/cancel", status_code=202)
+async def cancel_voice_job(voice_input_id: str, request: Request) -> JSONResponse:
+    try:
+        from uuid import UUID
+
+        job = await request.app.state.voice_job_registry.cancel(UUID(voice_input_id))
+    except (VoiceJobNotFoundError, VoiceJobConflictError, ValueError) as error:
+        return voice_error(error)
+    return JSONResponse(voice_job_payload(job), status_code=202)
 
 
 @router.post("/conversations", status_code=201)
