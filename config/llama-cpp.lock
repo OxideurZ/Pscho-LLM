@@ -1,5 +1,13 @@
-# A benchmark is not a reference result until these values identify the tested binary exactly.
-# Set them after validating the locally installed llama-server with the configured GGUF.
-LLAMA_CPP_VERSION=REQUIRED
-LLAMA_CPP_BUILD=REQUIRED
+# Reference runtime selected for the first Milestone A hardware validation.
+LLAMA_CPP_VERSION=b9637
+LLAMA_CPP_BUILD=aedb2a5e9ca3d4064148bbb919e0ddc0c1b70ab3
 
+# Official Windows CUDA 12.4 artifacts used by the development machine.
+WINDOWS_CUDA_ARCHIVE=llama-b9637-bin-win-cuda-12.4-x64.zip
+WINDOWS_CUDA_SHA256=e0080832743b478fc3d1a465c2d281091c3e02145d70ad06ad181f81895270a8
+WINDOWS_CUDART_ARCHIVE=cudart-llama-bin-win-cuda-12.4-x64.zip
+WINDOWS_CUDART_SHA256=8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6
+
+# Official macOS Apple Silicon artifact for portability validation.
+MACOS_ARM64_ARCHIVE=llama-b9637-bin-macos-arm64.tar.gz
+MACOS_ARM64_SHA256=72a93f3e68c31de3e438d462669aad1fcdb423b995e9c41033cc7d27a9a3ac69

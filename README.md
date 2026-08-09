@@ -62,13 +62,23 @@ les exposer sur `0.0.0.0` pendant cette milestone.
 
 ## Préparer llama.cpp et le modèle
 
-Construire ou installer `llama.cpp` depuis son dépôt officiel, vérifier que le modèle sélectionné
-fonctionne, puis inscrire l’identifiant exact du build/commit dans `config/llama-cpp.lock` et dans
-les variables `LLAMA_CPP_VERSION` / `LLAMA_CPP_BUILD`. Une valeur flottante comme `latest` ne peut
-pas produire un benchmark de référence.
+La baseline runtime est épinglée sur `llama.cpp` **b9637**, commit
+`aedb2a5e9ca3d4064148bbb919e0ddc0c1b70ab3`. Les noms et SHA256 des distributions Windows CUDA
+12.4 et macOS arm64 officielles sont conservés dans `config/llama-cpp.lock`. Vérifier que cette
+version fonctionne avec le modèle, puis recopier ces identifiants dans `LLAMA_CPP_VERSION` et
+`LLAMA_CPP_BUILD`. Une valeur flottante comme `latest` ne peut pas produire un benchmark de
+référence.
 
 Placer le GGUF dans `models/` (ignoré par Git), puis vérifier son contenu en streaming depuis le
 disque :
+
+```console
+python scripts/install_llama_cpp.py
+python scripts/prepare_model.py
+```
+
+Ces téléchargements reprennent un fichier `.part` interrompu, valident la taille du modèle et
+vérifient les SHA256 avant extraction ou utilisation. Pour vérifier un GGUF déjà présent :
 
 ```console
 python scripts/verify_model.py models/Qwen3.6-35B-A3B-Q4_K_M.gguf --expected 671e47e0ec53c665d048b98c3ecbfd5236b5ca9c3e02ed19fc8f81f7b85140c7
@@ -170,4 +180,3 @@ les logs applicatifs. Seuls les identifiants, hashes, états, durées et compteu
 Il n’existe volontairement ni conversations/sessions persistantes, ni messages en base, ni mémoire,
 retrieval, embeddings, microphone, Whisper, Tauri ou cloud. L’application n’est pas un dispositif
 médical et ne remplace pas un professionnel ou un service d’urgence.
-

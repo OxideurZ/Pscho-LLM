@@ -19,5 +19,7 @@ benchmark/results/*.json
 benchmark/results/*.jsonl
 models/
 *.gguf
+tools/
+.cache/
 .DS_Store
 Thumbs.db

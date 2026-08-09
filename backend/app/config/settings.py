@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     model_name: str = "Qwen3.6-35B-A3B-Q4_K_M"
     model_path: Path = REPOSITORY_ROOT / "models/Qwen3.6-35B-A3B-Q4_K_M.gguf"
     model_expected_sha256: str = "671e47e0ec53c665d048b98c3ecbfd5236b5ca9c3e02ed19fc8f81f7b85140c7"
-    llama_cpp_version: str = "unknown"
-    llama_cpp_build: str = "unverified"
+    llama_cpp_version: str = "b9637"
+    llama_cpp_build: str = "aedb2a5e9ca3d4064148bbb919e0ddc0c1b70ab3"
     default_temperature: float = Field(default=0.7, ge=0, le=2)
     default_top_p: float = Field(default=0.9, gt=0, le=1)
     default_max_tokens: int = Field(default=800, gt=0)
