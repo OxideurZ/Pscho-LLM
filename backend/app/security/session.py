@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, Request, Response
 
-
 SESSION_COOKIE = "psych_local_session"
 
 

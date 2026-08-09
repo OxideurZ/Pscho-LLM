@@ -100,6 +100,7 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         )
         backup_task: asyncio.Task[None] | None = None
         if resolved_settings.security_enabled:
+
             async def periodic_backup() -> None:
                 while True:
                     await asyncio.sleep(resolved_settings.backup_interval_seconds)
@@ -132,7 +133,9 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
     @application.middleware("http")
     async def no_store_sensitive_responses(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/v1/auth", "/v1/conversations", "/v1/stt", "/v1/chat", "/v1/runs")):
+        if request.url.path.startswith(
+            ("/v1/auth", "/v1/conversations", "/v1/stt", "/v1/chat", "/v1/runs")
+        ):
             response.headers["Cache-Control"] = "no-store"
         return response
 

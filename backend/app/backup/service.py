@@ -21,7 +21,10 @@ class RestoreError(BackupError):
 
 class BackupService:
     def __init__(
-        self, database_path: Path, backup_directory: Path, encryption_key: bytes | None = None,
+        self,
+        database_path: Path,
+        backup_directory: Path,
+        encryption_key: bytes | None = None,
         retention_count: int = 7,
     ) -> None:
         self.database_path = database_path
@@ -54,8 +57,12 @@ class BackupService:
             raise BackupError("SQLite backup failed") from error
 
     async def rotate_snapshots(self) -> None:
-        snapshots = sorted(self.backup_directory.glob("psych-local-*.sqlite"), key=lambda item: item.stat().st_mtime, reverse=True)
-        for candidate in snapshots[self.retention_count:]:
+        snapshots = sorted(
+            self.backup_directory.glob("psych-local-*.sqlite"),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
+        for candidate in snapshots[self.retention_count :]:
             try:
                 await self.verify_snapshot(candidate)
             except BackupIntegrityError:
