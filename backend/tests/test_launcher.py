@@ -125,3 +125,14 @@ def test_windows_termination_forces_the_verified_process_tree(monkeypatch):
     terminate_owned(321)
 
     assert completed.call_args.args[0] == ["taskkill", "/PID", "321", "/T", "/F"]
+
+
+def test_pid_alive_uses_psutil_not_windows_signal_semantics(monkeypatch):
+    process = Mock()
+    process.is_running.return_value = True
+    process.status.return_value = "running"
+    monkeypatch.setattr("scripts.launcher.psutil.Process", lambda _pid: process)
+
+    from scripts.launcher import pid_alive
+
+    assert pid_alive(321) is True

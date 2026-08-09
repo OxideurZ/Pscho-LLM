@@ -76,11 +76,10 @@ def pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
     try:
-        # On Windows this asks the OS; on POSIX it is equally harmless.
-        os.kill(pid, 0)
-    except OSError:
+        process = psutil.Process(pid)
+        return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
+    except psutil.Error:
         return False
-    return True
 
 
 def process_identity_matches(pid: int, *tokens: str) -> bool:
@@ -96,18 +95,26 @@ def process_identity_matches(pid: int, *tokens: str) -> bool:
     return all(token.lower() in command for token in tokens)
 
 
-def terminate_owned(pid: int) -> None:
+def terminate_owned(pid: int) -> bool:
     if not pid_alive(pid):
-        return
+        return True
     if sys.platform == "win32":
-        subprocess.run(
+        result = subprocess.run(
             ["taskkill", "/PID", str(pid), "/T", "/F"],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+        if result.returncode != 0:
+            return False
     else:
         os.kill(pid, 15)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if not pid_alive(pid):
+            return True
+        time.sleep(0.1)
+    return not pid_alive(pid)
 
 
 class Launcher:
@@ -302,17 +309,19 @@ class Launcher:
         if instance is None:
             print("Aucune instance Psych-local gérée n’est active.")
             return
-        # Require both identity signals (recorded PID and local health) before owning a process.
-        if process_identity_matches(
+        # A recorded PID plus command identity proves ownership. Requiring a responding
+        # health endpoint here would leave a wedged owned process running indefinitely.
+        backend_owned = process_identity_matches(
             instance.backend_pid, "uvicorn", "backend.app.main:app"
-        ) and reachable(
-            local_url(self.settings.psych_local_host, instance.backend_port, "/v1/health")
-        ):
-            terminate_owned(instance.backend_pid)
-        if process_identity_matches(instance.llama_pid, "llama-server") and reachable(
-            f"http://{self.settings.psych_local_host}:{instance.llama_port}/health"
-        ):
-            terminate_owned(instance.llama_pid)
+        )
+        llama_owned = process_identity_matches(instance.llama_pid, "llama-server")
+        backend_stopped = not backend_owned or terminate_owned(instance.backend_pid)
+        llama_stopped = not llama_owned or terminate_owned(instance.llama_pid)
+        if not backend_stopped or not llama_stopped:
+            self.log("instance_state=stop_failed_process_still_alive")
+            raise RuntimeError(
+                "Arrêt local non confirmé ; l’état d’instance est conservé pour reprise."
+            )
         self.instance_path.unlink(missing_ok=True)
         self.log("instance_state=stopped")
 

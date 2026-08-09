@@ -67,7 +67,8 @@ Result: PASS. No parallel conversation pipeline exists.
 - Unit coverage verifies recording cancellation, STT cancellation, late-result rejection, one-job
   serialization and abandoned-job cleanup during backend shutdown.
 - The launcher checks the local STT binary and model SHA before start and now force-terminates only
-  its verified Windows process tree on stop.
+  its verified Windows process tree on stop. A real start -> stop validation ended with both local
+  endpoints at HTTP `000` and no remaining llama.cpp/FastAPI/Whisper process.
 - Privacy audit: `runtime/voice-jobs` was empty after validation; no audio files were found there;
   the technical log scan returned no `ULTRA_SECRET_VOICE_CARIBOU_2026` match. Remaining WAV files
   are only D0 synthetic fixtures outside the repository.
@@ -76,7 +77,7 @@ Result: PASS. No parallel conversation pipeline exists.
 ## Software regression
 
 ```text
-pytest                         77 passed
+pytest                         78 passed
 ruff check / format --check    passed
 vitest                         10 passed
 tsc --noEmit                   passed
@@ -87,9 +88,11 @@ git diff --check               passed
 ## Remaining hard-gate evidence
 
 The only uncollected mandatory evidence is a consented **real browser microphone** recording on this
-workstation (short natural French speech), including its permission/denial path. It is intentionally
-not simulated and has not been activated without the user’s consent. Once that run is accepted, the
-remaining report verdicts can be issued without another backend comparison.
+workstation (short natural French speech), including its permission/denial path. The user authorized
+it; the isolated in-app browser was opened on the live local UI and the Dictate control invoked, but
+that browser exposes no microphone device or permission prompt, so `getUserMedia()` remains pending.
+This is documented as an environment limitation rather than simulated. A normal browser on this
+workstation can collect the final evidence without another backend comparison.
 
 ```text
 STT_RELIABILITY       = PROVISIONAL GO (synthetic 30 s, 3 min, >10 min)
