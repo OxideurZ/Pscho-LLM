@@ -1,7 +1,7 @@
 # Milestone D - Exit report (validation in progress)
 
 Spec: `milestone-d-spec:v1.0`  
-Application commit validated: `34fc675`  
+Application commit validated: `1785463`
 Closure status: **PENDING explicit real-microphone validation**
 
 ## Configuration
@@ -69,6 +69,12 @@ Result: PASS. No parallel conversation pipeline exists.
 - The launcher checks the local STT binary and model SHA before start and now force-terminates only
   its verified Windows process tree on stop. A real start -> stop validation ended with both local
   endpoints at HTTP `000` and no remaining llama.cpp/FastAPI/Whisper process.
+- The interface exposes an explicit **Arrêter et libérer la VRAM** action. Its API schedules a
+  detached shutdown helper, stops the verified llama.cpp process before FastAPI, removes the managed
+  instance state and preserves SQLite. A fresh real-stack validation returned HTTP 202, then both
+  endpoints became HTTP `000`, `instance.json` disappeared and no managed llama.cpp, FastAPI,
+  Whisper or offload-helper process remained. Closing the browser tab alone does not unload models;
+  restart is explicit through `start.ps1`.
 - Privacy audit: `runtime/voice-jobs` was empty after validation; no audio files were found there;
   the technical log scan returned no `ULTRA_SECRET_VOICE_CARIBOU_2026` match. Remaining WAV files
   are only D0 synthetic fixtures outside the repository.
@@ -77,7 +83,7 @@ Result: PASS. No parallel conversation pipeline exists.
 ## Software regression
 
 ```text
-pytest                         78 passed
+pytest                         81 passed
 ruff check / format --check    passed
 vitest                         10 passed
 tsc --noEmit                   passed
