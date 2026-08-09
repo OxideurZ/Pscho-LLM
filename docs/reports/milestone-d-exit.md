@@ -1,8 +1,8 @@
-# Milestone D - Exit report (validation in progress)
+# Milestone D - Exit report
 
 Spec: `milestone-d-spec:v1.0`  
-Application commit validated: `1785463`
-Closure status: **PENDING explicit real-microphone validation**
+Application commit validated: `f95ef13`
+Closure status: **CLOSED — GO**
 
 ## Configuration
 
@@ -28,6 +28,14 @@ and 3-minute RTF of 0.0378 (versus 0.0905 for faster-whisper).
 ## Audio and lifecycle
 
 - Browser: `MediaRecorder` captures local chunks; stop is explicit and silence never stops capture.
+- Permission is an explicit, cancellable UI state with a bounded 20-second diagnostic timeout. The
+  Web Audio context is started from the user gesture so Chromium cannot silently leave the level
+  analyser suspended.
+- The recorder selects a supported Opus/Ogg/MP4 container and retains its actual MIME type for
+  decoding. Empty captures and unavailable/busy tracks have distinct user-facing errors.
+- The visible meter uses time-domain samples from the selected live audio track. All 20 bars use
+  browser-compatible pixel heights and the UI distinguishes initialization, active voice, silence
+  and a muted/ended track.
 - Normalization: browser Web Audio decode followed by offline mono 16 kHz PCM WAV rendering.
 - Transport: bounded WAV chunks (1 MiB) to an ephemeral backend directory.
 - The backend accepts one active transcription; competing STT work is cleanly rejected.
@@ -85,20 +93,24 @@ Result: PASS. No parallel conversation pipeline exists.
 ```text
 pytest                         81 passed
 ruff check / format --check    passed
-vitest                         10 passed
+vitest                         13 passed
 tsc --noEmit                   passed
 vite build                     passed
 git diff --check               passed
 ```
 
-## Remaining hard-gate evidence
+## Real browser microphone evidence
 
-The only uncollected mandatory evidence is a consented **real browser microphone** recording on this
-workstation (short natural French speech), including its permission/denial path. The user authorized
-it; the isolated in-app browser was opened on the live local UI and the Dictate control invoked, but
-that browser exposes no microphone device or permission prompt, so `getUserMedia()` remains pending.
-This is documented as an environment limitation rather than simulated. A normal browser on this
-workstation can collect the final evidence without another backend comparison.
+The user explicitly authorized and performed the final real-microphone validation on the reference
+workstation. The live browser exposed the Windows microphone array; the UI moved through permission,
+recording and transcription states. Twenty meter bars were visible and changed height from the real
+input signal. Natural French speech produced an editable Whisper transcript and then reused the
+existing voice-turn/Qwen/SQLite pipeline. The user confirmed the microphone now works correctly.
+
+A second real capture exercised cancellation: the selected device and elapsed time were displayed,
+low ambient input produced the explicit no-sound state, and Cancel stopped the track without creating
+another transcription. Permission timeout, denial, missing device, busy device, empty audio and
+decode failures remain covered by bounded UI paths and automated regression tests.
 
 ```text
 STT_RELIABILITY       = PROVISIONAL GO (synthetic 30 s, 3 min, >10 min)
@@ -108,7 +120,7 @@ NO_SPEECH_SAFETY      = GO (automated safety corpus)
 PRIVACY_BASELINE      = GO
 RESOURCE_COEXISTENCE  = GO
 REGRESSION            = GO
-REAL_MICROPHONE       = PENDING CONSENTED RUN
+REAL_MICROPHONE       = GO (consented live browser run + user confirmation)
 
-MILESTONE D = NOT CLOSED YET
+MILESTONE D = CLOSED — GO
 ```
