@@ -158,33 +158,52 @@ class LlamaCppBackend:
                     await client.aclose()
 
     async def generate_structured(
-        self, messages: list[LLMMessage], schema: type[BaseModel]
+        self,
+        messages: list[LLMMessage],
+        schema: type[BaseModel],
+        cancel_event: asyncio.Event | None = None,
     ) -> BaseModel:
         owns_client = self._client is None
         client = self._client or httpx.AsyncClient(
             base_url=self.settings.llama_server_url,
             timeout=httpx.Timeout(connect=5, read=300, write=10, pool=5),
         )
+        request_task: asyncio.Task[httpx.Response] | None = None
+        cancellation_task: asyncio.Task[bool] | None = None
         try:
-            response = await client.post(
-                "/v1/chat/completions",
-                json={
-                    "model": self.settings.model_name,
-                    "messages": [message.model_dump(mode="json") for message in messages],
-                    "stream": False,
-                    "temperature": 0,
-                    "seed": self.settings.default_seed,
-                    "max_tokens": self.settings.summary_budget_tokens,
-                    "response_format": {
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": schema.__name__,
-                            "strict": True,
-                            "schema": schema.model_json_schema(),
+            request_task = asyncio.create_task(
+                client.post(
+                    "/v1/chat/completions",
+                    json={
+                        "model": self.settings.model_name,
+                        "messages": [message.model_dump(mode="json") for message in messages],
+                        "stream": False,
+                        "temperature": 0,
+                        "seed": self.settings.default_seed,
+                        "max_tokens": self.settings.summary_budget_tokens,
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": schema.__name__,
+                                "strict": True,
+                                "schema": schema.model_json_schema(),
+                            },
                         },
                     },
-                },
+                )
             )
+            if cancel_event is not None:
+                cancellation_task = asyncio.create_task(cancel_event.wait())
+                await asyncio.wait(
+                    {request_task, cancellation_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if cancel_event.is_set():
+                    request_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await request_task
+                    raise asyncio.CancelledError
+            response = await request_task
             response.raise_for_status()
             body = response.json()
             content = body["choices"][0]["message"]["content"]
@@ -198,6 +217,14 @@ class LlamaCppBackend:
                 "llama-server returned invalid structured data"
             ) from error
         finally:
+            if request_task is not None and not request_task.done():
+                request_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await request_task
+            if cancellation_task is not None and not cancellation_task.done():
+                cancellation_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await cancellation_task
             if owns_client:
                 with suppress(Exception):
                     await client.aclose()

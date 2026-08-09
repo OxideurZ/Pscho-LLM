@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import httpx
@@ -112,6 +113,39 @@ async def test_structured_generation_uses_json_schema_and_validates_response() -
     assert isinstance(response_format, dict)
     assert response_format["type"] == "json_schema"
     assert response_format["json_schema"]["strict"] is True
+
+
+@pytest.mark.asyncio
+async def test_structured_generation_is_cancelled_with_parent_turn() -> None:
+    request_started = asyncio.Event()
+    request_closed = asyncio.Event()
+    never_respond = asyncio.Event()
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        request_started.set()
+        try:
+            await never_respond.wait()
+        finally:
+            request_closed.set()
+        raise AssertionError("unreachable")
+
+    cancel_event = asyncio.Event()
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://llama"
+    ) as client:
+        task = asyncio.create_task(
+            LlamaCppBackend(Settings(), client).generate_structured(
+                [LLMMessage(role=LLMRole.USER, content="Source")],
+                RollingSummary,
+                cancel_event,
+            )
+        )
+        await request_started.wait()
+        cancel_event.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert request_closed.is_set()
 
 
 @pytest.mark.asyncio

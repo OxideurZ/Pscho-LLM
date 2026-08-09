@@ -1,4 +1,6 @@
+import asyncio
 import json
+import logging
 from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -86,9 +88,25 @@ class StructuredBackend(FakeBackend):
         self.summaries = summaries
         self.structured_calls = 0
 
-    async def generate_structured(self, messages, schema):  # type: ignore[no-untyped-def]
+    async def generate_structured(  # type: ignore[no-untyped-def]
+        self, messages, schema, cancel_event=None
+    ):
         self.structured_calls += 1
         return self.summaries.pop(0)
+
+
+class CancellableStructuredBackend(FakeBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = asyncio.Event()
+
+    async def generate_structured(  # type: ignore[no-untyped-def]
+        self, messages, schema, cancel_event=None
+    ):
+        self.started.set()
+        assert cancel_event is not None
+        await cancel_event.wait()
+        raise asyncio.CancelledError
 
 
 def empty_summary(**overrides: list[str]) -> RollingSummary:
@@ -404,3 +422,57 @@ async def test_assistant_proposal_cannot_become_user_fact(tmp_path: Path) -> Non
             )
         ).fetchone()
     assert failed == (2,)
+
+
+@pytest.mark.asyncio
+async def test_summary_source_and_output_are_absent_from_logs(tmp_path: Path, caplog) -> None:
+    secret = "ULTRA_SECRET_SUMMARY_CARIBOU_7391"
+    caplog.set_level(logging.INFO)
+    database = Database(tmp_path / "app.sqlite", REPOSITORY_ROOT / "migrations")
+    await database.migrate()
+    repository = ConversationRepository(database)
+    conversation = await repository.create()
+    sources = list(await add_turn(repository, conversation.id, secret, "Assistant output"))
+    service = SummaryService(
+        settings_for(database.path),
+        StructuredBackend([empty_summary(user_stated_facts=[secret])]),
+        repository,
+        RunRepository(database.path),
+        REPOSITORY_ROOT,
+    )
+
+    await service.summarize(conversation.id, sources)
+
+    assert secret not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_summary_cancel_marks_internal_run_cancelled(tmp_path: Path) -> None:
+    database = Database(tmp_path / "app.sqlite", REPOSITORY_ROOT / "migrations")
+    await database.migrate()
+    repository = ConversationRepository(database)
+    conversation = await repository.create()
+    sources = list(await add_turn(repository, conversation.id, "Source", "Answer"))
+    backend = CancellableStructuredBackend()
+    service = SummaryService(
+        settings_for(database.path),
+        backend,
+        repository,
+        RunRepository(database.path),
+        REPOSITORY_ROOT,
+    )
+    cancel_event = asyncio.Event()
+    task = asyncio.create_task(service.summarize(conversation.id, sources, cancel_event))
+    await backend.started.wait()
+    cancel_event.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    async with database.connect() as connection:
+        runs = await (
+            await connection.execute(
+                "SELECT status FROM model_runs WHERE run_kind = 'rolling_summary'"
+            )
+        ).fetchall()
+    assert runs == [("cancelled",)]

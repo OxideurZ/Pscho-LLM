@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Protocol
 
@@ -25,6 +26,7 @@ class LLMBackend(Protocol):
         self,
         messages: list[LLMMessage],
         schema: type[BaseModel],
+        cancel_event: asyncio.Event | None = None,
     ) -> BaseModel: ...
 
     async def health(self) -> HealthStatus: ...

@@ -119,8 +119,22 @@ class ConversationChatService:
                         summary_budget_tokens=self.settings.summary_budget_tokens,
                         recent_raw_budget_tokens=self.settings.recent_raw_budget_tokens,
                     ),
+                    cancel_event=run.cancel_event,
                 )
                 upstream_messages = context.messages
+            except asyncio.CancelledError:
+                if not run.cancel_event.is_set():
+                    raise
+                await self._finalize(
+                    run,
+                    turn,
+                    content_buffer,
+                    MessageStatus.INTERRUPTED,
+                    RunStatus.CANCELLED,
+                )
+                terminal_sent = True
+                yield serialize_sse("cancelled", {"run_id": run.id})
+                return
             except (ContextBudgetExceededError, SummaryGenerationError) as error:
                 await self._finalize(
                     run,

@@ -698,6 +698,62 @@ async def test_unexpected_context_failure_is_durable_and_sanitized(tmp_path: Pat
     assert len(registry) == 0
 
 
+@pytest.mark.asyncio
+async def test_cancel_during_context_preparation_interrupts_turn(tmp_path: Path) -> None:
+    database = Database(tmp_path / "app.sqlite", REPOSITORY_ROOT / "migrations")
+    await database.migrate()
+    repository = ConversationRepository(database)
+    conversation = await repository.create()
+    registry = RunRegistry()
+    context_started = asyncio.Event()
+    context_builder = AsyncMock(spec=ContextBuilder)
+
+    async def cancelled_context(**kwargs):  # type: ignore[no-untyped-def]
+        context_started.set()
+        cancel_event = kwargs["cancel_event"]
+        await cancel_event.wait()
+        raise asyncio.CancelledError
+
+    context_builder.build_context.side_effect = cancelled_context
+    service = ConversationChatService(
+        settings_for(database.path),
+        FakeBackend(),
+        registry,
+        repository,
+        context_builder,
+        REPOSITORY_ROOT,
+    )
+
+    async def connected() -> bool:
+        return False
+
+    stream = service.stream_turn(
+        conversation_id=conversation.id,
+        client_turn_id=str(uuid4()),
+        content="Long context",
+        input_type="text",
+        options=GenerationOptions(),
+        is_disconnected=connected,
+    )
+    started = json.loads((await anext(stream)).split("data: ", 1)[1])
+    next_frame = asyncio.create_task(anext(stream))
+    await context_started.wait()
+    await registry.cancel(started["run_id"])
+
+    assert await next_frame == (f'event: cancelled\ndata: {{"run_id":"{started["run_id"]}"}}\n\n')
+    await stream.aclose()
+    messages = await repository.messages(conversation.id)
+    assert messages[-1].status.value == "interrupted"
+    async with database.connect() as connection:
+        run = await (
+            await connection.execute(
+                "SELECT status FROM model_runs WHERE id = ?", (started["run_id"],)
+            )
+        ).fetchone()
+    assert run == ("cancelled",)
+    assert len(registry) == 0
+
+
 def test_twenty_persistent_turns_survive_app_restart_and_turn_21_uses_history(
     tmp_path: Path,
 ) -> None:

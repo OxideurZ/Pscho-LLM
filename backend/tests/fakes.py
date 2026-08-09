@@ -51,7 +51,10 @@ class FakeBackend:
         )
 
     async def generate_structured(
-        self, messages: list[LLMMessage], schema: type[BaseModel]
+        self,
+        messages: list[LLMMessage],
+        schema: type[BaseModel],
+        cancel_event: asyncio.Event | None = None,
     ) -> BaseModel:
         raise NotImplementedError
 

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -80,7 +81,10 @@ class SummaryService:
         self.max_attempts = max_attempts
 
     async def summarize(
-        self, conversation_id: str, source_messages: list[Message]
+        self,
+        conversation_id: str,
+        source_messages: list[Message],
+        cancel_event: asyncio.Event | None = None,
     ) -> tuple[str, str]:
         latest = await self.conversation_repository.latest_summary(conversation_id)
         covered = (
@@ -140,12 +144,17 @@ class SummaryService:
             )
             await self.run_repository.update_status(run.id, RunStatus.GENERATING)
             try:
-                generated = await self.backend.generate_structured(messages, RollingSummary)
+                generated = await self.backend.generate_structured(
+                    messages, RollingSummary, cancel_event
+                )
                 summary = RollingSummary.model_validate(generated)
                 self._validate_epistemic_provenance(summary, new_sources)
                 content_json = summary.model_dump_json()
                 if len(content_json.encode("utf-8")) > self.settings.summary_budget_tokens:
                     raise SummaryValidationError("Summary exceeds its conservative token budget")
+            except asyncio.CancelledError:
+                await self.run_repository.update_status(run.id, RunStatus.CANCELLED)
+                raise
             except (ValidationError, SummaryValidationError) as error:
                 last_error = error
                 last_error_code = SummaryValidationError.code

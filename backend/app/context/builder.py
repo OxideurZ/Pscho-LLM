@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -53,7 +54,10 @@ class ContextBuildResult:
 
 class SummaryProvider(Protocol):
     async def summarize(
-        self, conversation_id: str, source_messages: list[Message]
+        self,
+        conversation_id: str,
+        source_messages: list[Message],
+        cancel_event: asyncio.Event | None = None,
     ) -> tuple[str, str]: ...
 
 
@@ -75,6 +79,7 @@ class ContextBuilder:
         current_message_id: str,
         system_prompt: str,
         budget: ContextBudget,
+        cancel_event: asyncio.Event | None = None,
     ) -> ContextBuildResult:
         raw = await self.repository.context_messages(conversation_id, current_message_id)
         raw_messages = [
@@ -103,7 +108,9 @@ class ContextBuilder:
                 "Raw context exceeds budget and nothing can be summarized"
             )
 
-        summary_id, summary_content = await self.summary_provider.summarize(conversation_id, old)
+        summary_id, summary_content = await self.summary_provider.summarize(
+            conversation_id, old, cancel_event
+        )
         combined_system = (
             f"{system_prompt.rstrip()}\n\n"
             "Résumé roulant durable des échanges plus anciens (JSON de provenance validée) :\n"
