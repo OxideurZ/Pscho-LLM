@@ -26,6 +26,7 @@ export type VoiceBinding = {
 export const VOICE_AUTO_SEND_GRACE_MS = 1_500;
 const MAX_RECORDING_MS = 15 * 60 * 1_000;
 const NORMALIZED_SAMPLE_RATE = 16_000;
+const UPLOAD_CHUNK_BYTES = 1_024 * 1_024;
 
 export function useVoiceRecorder(
   onSend: (text: string, binding: VoiceBinding) => Promise<void>,
@@ -101,7 +102,12 @@ export function useVoiceRecorder(
         const wav = await mediaPartsToWav(parts.current);
         release();
         await createVoiceJob(frozen.voiceInputId, frozen.conversationId, frozen.clientTurnId);
-        await appendVoiceChunk(frozen.voiceInputId, wav);
+        for (let offset = 0; offset < wav.size; offset += UPLOAD_CHUNK_BYTES) {
+          await appendVoiceChunk(
+            frozen.voiceInputId,
+            wav.slice(offset, Math.min(offset + UPLOAD_CHUNK_BYTES, wav.size)),
+          );
+        }
         await finalizeVoiceJob(frozen.voiceInputId);
         setState("transcribing");
         await poll(frozen.voiceInputId);

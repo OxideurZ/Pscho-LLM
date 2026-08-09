@@ -36,13 +36,18 @@ def settings_for(tmp_path: Path) -> Settings:
     )
 
 
-def wav_chunk(amplitude: int = 1_000, frames: int = 1_600) -> bytes:
+def wav_chunk(amplitude: int = 1_000, frames: int = 1_600, click: bool = False) -> bytes:
     path = Path("audio.wav")
     with wave.open(str(path), "wb") as target:
         target.setnchannels(1)
         target.setsampwidth(2)
         target.setframerate(16_000)
-        target.writeframes((amplitude.to_bytes(2, "little", signed=True)) * frames)
+        samples = [amplitude] * frames
+        if click:
+            samples[0] = 12_000
+        target.writeframes(
+            b"".join(sample.to_bytes(2, "little", signed=True) for sample in samples)
+        )
     try:
         return path.read_bytes()
     finally:
@@ -80,6 +85,23 @@ async def test_silence_never_creates_a_transcript(tmp_path: Path) -> None:
     await registry.create(voice_input_id, "conversation-a", uuid4())
     await registry.append_chunk(voice_input_id, wav_chunk(amplitude=0))
     job = await registry.finalize(voice_input_id)
+    assert job.status is VoiceJobStatus.FAILED
+    assert job.error_code == "STT_NO_SPEECH"
+    assert job.transcript is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("amplitude,click", [(20, False), (45, False), (0, True)])
+async def test_low_energy_noise_never_creates_a_transcript(
+    tmp_path: Path, amplitude: int, click: bool
+) -> None:
+    registry = VoiceJobRegistry(settings_for(tmp_path), FakeSTT("hallucinated words"))
+    voice_input_id = uuid4()
+    await registry.create(voice_input_id, "conversation-a", uuid4())
+    await registry.append_chunk(voice_input_id, wav_chunk(amplitude=amplitude, click=click))
+
+    job = await registry.finalize(voice_input_id)
+
     assert job.status is VoiceJobStatus.FAILED
     assert job.error_code == "STT_NO_SPEECH"
     assert job.transcript is None
