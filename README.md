@@ -168,7 +168,7 @@ Le premier rapport matériel contrôlé est disponible dans
 | `PSYCH_LOCAL_HOST` / `PORT` | `127.0.0.1` / `8000` | écoute FastAPI |
 | `LLAMA_SERVER_URL` | `http://127.0.0.1:8080` | moteur indépendant |
 | `DATABASE_PATH` | `psych-local.db` | runs techniques uniquement |
-| `PROMPT_ID` / `VERSION` | `conversation_system` / `0.1.0` | prompt versionné et hashé |
+| `PROMPT_ID` / `VERSION` | `conversation_system` / `0.1.1` | prompt versionné et hashé |
 | `MODEL_NAME` / `PATH` | baseline Qwen | identification locale |
 | `MODEL_EXPECTED_SHA256` | hash canonique | garde-fou benchmark |
 | `LLAMA_CPP_VERSION` / `BUILD` | `b9637` / commit épinglé | identité du backend |

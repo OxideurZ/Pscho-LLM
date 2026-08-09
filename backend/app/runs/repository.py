@@ -75,7 +75,9 @@ class RunRepository:
             )
             await connection.commit()
 
-    async def update_metrics(self, run_id: str, metrics: dict[str, int | float | None]) -> None:
+    async def update_metrics(
+        self, run_id: str, metrics: dict[str, int | float | str | bool | None]
+    ) -> None:
         async with aiosqlite.connect(self.database_path, timeout=30) as connection:
             await connection.execute(
                 """

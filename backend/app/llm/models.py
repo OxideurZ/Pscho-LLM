@@ -3,6 +3,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+MetricValue = int | float | str | bool | None
+
 
 class LLMRole(StrEnum):
     SYSTEM = "system"
@@ -30,7 +32,7 @@ class GenerationOptions(BaseModel):
 class LLMStreamEvent(BaseModel):
     type: Literal["generation_started", "delta", "metrics"]
     text: str | None = None
-    metrics: dict[str, int | float | None] | None = None
+    metrics: dict[str, MetricValue] | None = None
 
 
 class HealthStatus(BaseModel):

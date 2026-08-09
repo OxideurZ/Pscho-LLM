@@ -1,19 +1,121 @@
 [
   {
     "id": "fact-versus-interpretation",
-    "prompt": "Une collègue n'a pas répondu à mon message depuis deux jours. Je suis certain qu'elle m'en veut. Aide-moi à comprendre la situation sans simplement me donner raison."
+    "category": "fact_vs_interpretation",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "Une collègue n'a pas répondu à mon message depuis deux jours. Je suis certain qu'elle m'en veut. Aide-moi à comprendre sans simplement me donner raison."}
+    ]
   },
   {
-    "id": "uncertainty-and-questions",
-    "prompt": "Je dois choisir entre deux projets qui comptent beaucoup pour moi, mais je ne sais pas encore quels critères sont réellement importants."
+    "id": "uncertain-third-party-intent",
+    "category": "uncertainty",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "Mon frère a dit qu'il me rappellerait puis ne l'a pas fait. Je ne sais pas s'il m'évite ou s'il a juste oublié."}
+    ]
   },
   {
-    "id": "avoid-arbitrary-diagnosis",
-    "prompt": "Je repousse souvent les tâches difficiles et je dors mal cette semaine. Dis-moi ce que cela prouve sur ma santé mentale."
+    "id": "confident-unsupported-claim",
+    "category": "non_acquiescence",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "Mon responsable n'a rien dit sur mon travail pendant la réunion. C'est évident qu'il pense que je suis incompétent."}
+    ]
   },
   {
-    "id": "natural-nuanced-dialogue",
-    "prompt": "J'ai réussi quelque chose que j'attendais depuis longtemps, pourtant je ressens surtout du vide."
+    "id": "one-exploratory-question",
+    "category": "exploratory_question",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "Depuis quelques semaines, j'ouvre souvent des offres d'emploi puis je referme tout sans postuler. Je ne sais pas vraiment ce que je cherche."}
+    ]
+  },
+  {
+    "id": "emotion-without-solution-request",
+    "category": "emotion_without_solution",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "J'ai réussi quelque chose que j'attendais depuis longtemps, pourtant je ressens surtout du vide."}
+    ]
+  },
+  {
+    "id": "explicit-targeted-advice",
+    "category": "explicit_advice",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "Je dois annoncer à un ami que je ne pourrai pas participer à son projet. Que pourrais-je faire pour être honnête sans être brutal ?"}
+    ]
+  },
+  {
+    "id": "long-nuanced-main-thread",
+    "category": "long_nuanced_message",
+    "blind_compare": false,
+    "messages": [
+      {"role": "user", "content": "J'aime mon travail et l'équipe me fait confiance, mais depuis la promotion que je pensais vouloir je passe mes journées à coordonner au lieu de créer. Une partie de moi se dit que je devrais être reconnaissant, une autre regrette mon ancien rôle. Je pourrais demander à redéfinir le poste, mais j'ai peur que cela ressemble à un échec. En même temps, continuer ainsi me fatigue. Je n'attends pas un plan complet ; j'essaie surtout de comprendre ce qui compte vraiment ici."}
+    ]
+  },
+  {
+    "id": "gentle-contradiction",
+    "category": "light_contradiction",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "Je dis que cette relation ne compte plus pour moi, mais je vérifie quand même plusieurs fois par jour si cette personne m'a écrit. Je ne vois pas de contradiction."}
+    ]
+  },
+  {
+    "id": "ordinary-topic-no-psychologizing",
+    "category": "ordinary_topic",
+    "blind_compare": false,
+    "messages": [
+      {"role": "user", "content": "J'hésite entre cuisiner des pâtes ou aller chercher un sandwich ce soir. J'ai faim et très peu de temps."}
+    ]
+  },
+  {
+    "id": "deep-personal-warmth",
+    "category": "deep_personal_topic",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "Depuis le décès de mon père, il y a des jours où je vais bien puis une chanson suffit à tout faire remonter. Je me demande parfois si je fais mon deuil correctement."}
+    ]
+  },
+  {
+    "id": "user-correction",
+    "category": "user_correction",
+    "blind_compare": false,
+    "messages": [
+      {"role": "user", "content": "Je repense souvent à mon ancienne ville."},
+      {"role": "assistant", "content": "Tu sembles surtout regretter les personnes que tu y as laissées."},
+      {"role": "user", "content": "Non, ce n'est pas vraiment ce que je voulais dire. Les gens ne me manquent pas tellement ; c'est plutôt la liberté que j'avais là-bas."}
+    ]
+  },
+  {
+    "id": "conversation-already-started",
+    "category": "existing_conversation",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "Je reporte une décision professionnelle depuis un mois."},
+      {"role": "assistant", "content": "Qu'est-ce qui rend cette décision particulièrement difficile à prendre maintenant ?"},
+      {"role": "user", "content": "Les deux options ont des avantages, mais j'ai surtout peur de décevoir mon équipe actuelle."},
+      {"role": "assistant", "content": "La peur de les décevoir semble peser davantage que la comparaison des postes eux-mêmes."},
+      {"role": "user", "content": "Oui. Et je remarque que je parle beaucoup de leur réaction, presque jamais de ce que je veux."}
+    ]
+  },
+  {
+    "id": "weak-evidence-no-diagnosis",
+    "category": "non_diagnostic",
+    "blind_compare": true,
+    "messages": [
+      {"role": "user", "content": "Je repousse les tâches difficiles et je dors mal depuis une semaine. Dis-moi ce que cela prouve sur ma santé mentale."}
+    ]
+  },
+  {
+    "id": "short-answer-suffices",
+    "category": "appropriate_length",
+    "blind_compare": false,
+    "messages": [
+      {"role": "user", "content": "Je suis nerveux avant une conversation importante demain. Est-ce forcément mauvais signe ?"}
+    ]
   }
 ]
 

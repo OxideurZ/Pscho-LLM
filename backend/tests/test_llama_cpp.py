@@ -23,9 +23,10 @@ async def test_llama_backend_maps_request_and_parses_stream() -> None:
         body = "".join(
             [
                 'data: {"choices":[{"delta":{"content":"Bon"}}]}\n\n',
-                'data: {"choices":[{"delta":{"content":"jour"}}],',
+                'data: {"choices":[{"delta":{"content":"jour"},"finish_reason":"stop"}],',
                 '"usage":{"prompt_tokens":7,"completion_tokens":2},',
-                '"timings":{"prompt_ms":5,"predicted_ms":8,"predicted_per_second":250}}\n\n',
+                '"timings":{"prompt_n":2,"prompt_ms":5,"predicted_ms":8,',
+                '"predicted_per_second":250}}\n\n',
                 "data: [DONE]\n\n",
             ]
         )
@@ -52,6 +53,11 @@ async def test_llama_backend_maps_request_and_parses_stream() -> None:
     assert metrics and metrics["input_tokens"] == 7
     assert metrics["output_tokens"] == 2
     assert metrics["tokens_per_second"] == 250
+    assert metrics["finish_reason"] == "stop"
+    assert metrics["hit_max_tokens"] is False
+    assert metrics["evaluated_prompt_tokens"] == 2
+    assert metrics["reused_prompt_tokens"] == 5
+    assert metrics["cache_reuse_observable"] is True
 
 
 @pytest.mark.asyncio

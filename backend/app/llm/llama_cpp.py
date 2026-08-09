@@ -65,6 +65,7 @@ class LlamaCppBackend:
         output_tokens = 0
         usage: dict[str, int] = {}
         timings: dict[str, int | float | None] = {}
+        finish_reason: str | None = None
 
         try:
             async with client.stream(
@@ -90,6 +91,8 @@ class LlamaCppBackend:
                     if chunk.get("timings"):
                         timings = chunk["timings"]
                     choices = chunk.get("choices") or []
+                    if choices and choices[0].get("finish_reason"):
+                        finish_reason = choices[0]["finish_reason"]
                     text = choices[0].get("delta", {}).get("content") if choices else None
                     if text:
                         if first_token_at is None:
@@ -102,6 +105,14 @@ class LlamaCppBackend:
                     round((finished - first_token_at) * 1000) if first_token_at else None
                 )
                 reported_output = usage.get("completion_tokens", output_tokens)
+                input_tokens = usage.get("prompt_tokens")
+                evaluated_prompt_tokens = timings.get("prompt_n")
+                cache_reuse_observable = isinstance(evaluated_prompt_tokens, int)
+                reused_prompt_tokens = (
+                    max(input_tokens - evaluated_prompt_tokens, 0)
+                    if input_tokens is not None and isinstance(evaluated_prompt_tokens, int)
+                    else None
+                )
                 tokens_per_second = (
                     round(reported_output / ((finished - first_token_at) or 1), 3)
                     if first_token_at
@@ -113,9 +124,14 @@ class LlamaCppBackend:
                         "ttft_ms": round((first_token_at - started) * 1000)
                         if first_token_at
                         else None,
-                        "input_tokens": usage.get("prompt_tokens"),
+                        "input_tokens": input_tokens,
                         "output_tokens": reported_output,
+                        "finish_reason": finish_reason,
+                        "hit_max_tokens": finish_reason == "length",
                         "prompt_eval_ms": timings.get("prompt_ms"),
+                        "evaluated_prompt_tokens": evaluated_prompt_tokens,
+                        "reused_prompt_tokens": reused_prompt_tokens,
+                        "cache_reuse_observable": cache_reuse_observable,
                         "generation_ms": timings.get("predicted_ms", generation_ms),
                         "tokens_per_second": timings.get("predicted_per_second", tokens_per_second),
                         "total_ms": round((finished - started) * 1000),

@@ -13,6 +13,11 @@ export interface RunMetrics {
   output_tokens: number | null;
   tokens_per_second: number | null;
   total_ms: number | null;
+  finish_reason?: string | null;
+  hit_max_tokens?: boolean;
+  evaluated_prompt_tokens?: number | null;
+  reused_prompt_tokens?: number | null;
+  cache_reuse_observable?: boolean;
 }
 
 export interface ChatHandlers {
@@ -68,4 +73,3 @@ export async function cancelRun(runId: string): Promise<void> {
   });
   if (!response.ok && response.status !== 409) throw new Error("CANCEL_FAILED");
 }
-

@@ -80,7 +80,7 @@ class ChatService:
         run.task = asyncio.create_task(produce(), name=f"llm-{run.id}")
         run.task.add_done_callback(lambda _task: queue.put_nowait(_END))
         terminal_sent = False
-        metrics: dict[str, int | float | None] | None = None
+        metrics: dict[str, int | float | str | bool | None] | None = None
 
         try:
             while True:
