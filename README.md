@@ -73,22 +73,22 @@ Placer le GGUF dans `models/` (ignoré par Git), puis vérifier son contenu en s
 disque :
 
 ```console
-python scripts/install_llama_cpp.py
-python scripts/prepare_model.py
+python -m scripts.install_llama_cpp
+python -m scripts.prepare_model
 ```
 
 Ces téléchargements reprennent un fichier `.part` interrompu, valident la taille du modèle et
 vérifient les SHA256 avant extraction ou utilisation. Pour vérifier un GGUF déjà présent :
 
 ```console
-python scripts/verify_model.py models/Qwen3.6-35B-A3B-Q4_K_M.gguf --expected 671e47e0ec53c665d048b98c3ecbfd5236b5ca9c3e02ed19fc8f81f7b85140c7
+python -m scripts.verify_model models/Qwen3.6-35B-A3B-Q4_K_M.gguf --expected 671e47e0ec53c665d048b98c3ecbfd5236b5ca9c3e02ed19fc8f81f7b85140c7
 ```
 
 Une divergence retourne un code non nul et bloque le runner de benchmark. Démarrer ensuite le
 moteur manuellement, sur l’interface locale uniquement :
 
 ```console
-llama-server -m models/Qwen3.6-35B-A3B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 32768
+llama-server -m models/Qwen3.6-35B-A3B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 32768 --parallel 1 --jinja --reasoning off --metrics
 ```
 
 Valider `/health`, `/v1/models` et `/v1/chat/completions` directement sur le moteur avant de tester
@@ -99,7 +99,7 @@ Psych-local. La gestion automatique de ce processus est volontairement hors pér
 Appliquer les migrations et lancer l’API :
 
 ```console
-python scripts/migrate.py
+python -m scripts.migrate
 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
@@ -136,6 +136,15 @@ Les tests utilisent un faux backend : aucun modèle de 20,4 Go n’est nécessai
 tests matériels d’annulation réelle, de crash/recovery et de libération du slot doivent toutefois
 être exécutés avec `llama-server` avant la décision de sortie.
 
+Avec les deux services lancés, les smoke tests matériels sont disponibles explicitement :
+
+```console
+python -m scripts.hardware_smoke cancel
+python -m scripts.hardware_smoke crash --llama-pid 12345
+```
+
+Le second tue volontairement le PID fourni et doit être suivi d’un redémarrage manuel du moteur.
+
 ## Benchmarks
 
 Les scénarios déterministes 5k/15k/30k, la méthode cold/warm et la grille qualitative sont décrits
@@ -159,7 +168,8 @@ n’est pas explicitement ajouté.
 | `PROMPT_ID` / `VERSION` | `conversation_system` / `0.1.0` | prompt versionné et hashé |
 | `MODEL_NAME` / `PATH` | baseline Qwen | identification locale |
 | `MODEL_EXPECTED_SHA256` | hash canonique | garde-fou benchmark |
-| `LLAMA_CPP_VERSION` / `BUILD` | `unknown` / `unverified` | identité du backend |
+| `LLAMA_CPP_VERSION` / `BUILD` | `b9637` / commit épinglé | identité du backend |
+| `LLAMA_CPP_REASONING` | `off` | mode de raisonnement de la baseline |
 | `DEFAULT_*` | voir `.env.example` | paramètres de génération |
 | `CONTEXT_SIZE` | `32768` | fenêtre de contexte déclarée |
 

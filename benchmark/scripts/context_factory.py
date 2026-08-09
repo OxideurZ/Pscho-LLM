@@ -21,14 +21,18 @@ EVENTS = [
     "a noté que plusieurs explications restaient compatibles avec les faits",
 ]
 
+# Calibrated once against the pinned Qwen3.6 GGUF tokenizer. The benchmark records the exact
+# upstream input token count; this ratio only keeps generated contexts near their requested size.
+TOKENS_PER_WORD = 1.585
+
 
 def build_context(scenario: ContextScenario) -> str:
     """Create deterministic synthetic prose with an approximate whitespace-token target."""
     randomizer = random.Random(scenario.seed)
     paragraphs: list[str] = []
-    word_count = 0
+    estimated_tokens = 0.0
     index = 1
-    while word_count < scenario.target_tokens:
+    while estimated_tokens < scenario.target_tokens:
         paragraph = (
             f"Note {index}. {randomizer.choice(SUBJECTS)} se trouvait dans "
             f"{randomizer.choice(PLACES)} "
@@ -39,6 +43,6 @@ def build_context(scenario: ContextScenario) -> str:
             "lecture."
         )
         paragraphs.append(paragraph)
-        word_count += len(paragraph.split())
+        estimated_tokens += len(paragraph.split()) * TOKENS_PER_WORD
         index += 1
     return "\n\n".join(paragraphs) + f"\n\nTâche finale : {scenario.task}"

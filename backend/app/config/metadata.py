@@ -39,5 +39,7 @@ def runtime_info(settings: Settings) -> dict[str, Any]:
         "gpu": settings.gpu_name,
         "vram_mb": settings.gpu_vram_mb,
         "backend_accelerator": settings.backend_accelerator,
+        "llama_cpp_reasoning": settings.llama_cpp_reasoning,
+        "llama_server_url": settings.llama_server_url,
         "python": platform.python_version(),
     }

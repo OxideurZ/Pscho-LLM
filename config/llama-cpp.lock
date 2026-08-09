@@ -1,6 +1,9 @@
 # Reference runtime selected for the first Milestone A hardware validation.
 LLAMA_CPP_VERSION=b9637
 LLAMA_CPP_BUILD=aedb2a5e9ca3d4064148bbb919e0ddc0c1b70ab3
+LLAMA_CPP_REASONING=off
+REFERENCE_CONTEXT_SIZE=32768
+REFERENCE_PARALLEL=1
 
 # Official Windows CUDA 12.4 artifacts used by the development machine.
 WINDOWS_CUDA_ARCHIVE=llama-b9637-bin-win-cuda-12.4-x64.zip

@@ -3,7 +3,6 @@
 
 import argparse
 import json
-import os
 import platform
 import sys
 from datetime import UTC, datetime
@@ -13,6 +12,9 @@ from typing import Any
 import httpx
 import psutil
 
+from backend.app.config.metadata import git_commit, runtime_info
+from backend.app.config.prompt import load_prompt
+from backend.app.config.settings import REPOSITORY_ROOT, Settings
 from benchmark.scripts.context_factory import ContextScenario, build_context
 from scripts.verify_model import verify
 
@@ -33,21 +35,36 @@ def parse_sse(body: str) -> list[tuple[str, dict[str, Any]]]:
     return events
 
 
-def require_reference_metadata() -> dict[str, str]:
-    names = [
-        "APP_VERSION",
-        "LLAMA_CPP_VERSION",
-        "LLAMA_CPP_BUILD",
-        "MODEL_NAME",
-        "MODEL_PATH",
-        "MODEL_EXPECTED_SHA256",
-    ]
-    values = {name: os.getenv(name, "") for name in names}
-    missing = [name for name, value in values.items() if not value or value == "REQUIRED"]
+def require_reference_metadata() -> dict[str, Any]:
+    settings = Settings()
+    required = {
+        "app_version": settings.app_version,
+        "llama_cpp_version": settings.llama_cpp_version,
+        "llama_cpp_build": settings.llama_cpp_build,
+        "model_name": settings.model_name,
+        "model_sha256": settings.model_expected_sha256,
+    }
+    invalid = {"unknown", "unverified", "REQUIRED"}
+    missing = [name for name, value in required.items() if not value or value in invalid]
     if missing:
         raise ValueError("Missing reference metadata: " + ", ".join(missing))
-    verify(Path(values["MODEL_PATH"]), values["MODEL_EXPECTED_SHA256"])
-    return values
+    verified_sha = verify(settings.model_path, settings.model_expected_sha256)
+    prompt = load_prompt(REPOSITORY_ROOT, settings.prompt_id, settings.prompt_version)
+    commit = git_commit(REPOSITORY_ROOT)
+    if commit is None:
+        raise ValueError("app_git_commit is required for reference benchmarks")
+    return {
+        **required,
+        "app_git_commit": commit,
+        "model_sha256": verified_sha,
+        "quantization": "Q4_K_M",
+        "prompt_id": prompt.id,
+        "prompt_version": prompt.version,
+        "prompt_sha256": prompt.sha256,
+        "context_size": settings.context_size,
+        "llama_cpp_reasoning": settings.llama_cpp_reasoning,
+        "runtime": runtime_info(settings),
+    }
 
 
 def main() -> int:
