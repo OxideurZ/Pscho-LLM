@@ -16,7 +16,7 @@ from backend.app.config.prompt import load_prompt
 from backend.app.config.settings import REPOSITORY_ROOT, Settings
 from backend.app.llm import LLMMessage, LLMRole
 from backend.app.llm.llama_cpp import LlamaCppBackend
-from backend.app.memory import MemoryExtractionResult
+from backend.app.memory import MemoryExtractionResult, canonicalize_source_spans
 from benchmark.scripts.run_incremental import direct_llama_metrics
 
 CHAT_MESSAGES = [
@@ -93,26 +93,15 @@ async def extract_memory(settings: Settings) -> tuple[MemoryExtractionResult, in
     return result, elapsed_ms
 
 
-def validate_smoke(result: MemoryExtractionResult) -> None:
+def validate_smoke(result: MemoryExtractionResult) -> tuple[MemoryExtractionResult, int]:
     if not result.candidates:
         raise RuntimeError("structured extraction returned no candidate")
-    for candidate in result.candidates:
-        if not any(source.message_id == MEMORY_MESSAGE_ID for source in candidate.source_spans):
-            raise RuntimeError("candidate does not include the target message")
-        for source in candidate.source_spans:
-            if source.message_id != MEMORY_MESSAGE_ID:
-                raise RuntimeError("F0 smoke referenced an unknown message")
-            if MEMORY_TEXT[source.start_char : source.end_char] != source.quote:
-                matches = [
-                    index
-                    for index in range(len(MEMORY_TEXT))
-                    if MEMORY_TEXT.startswith(source.quote, index)
-                ]
-                raise RuntimeError(
-                    "F0 smoke returned a mismatched source span "
-                    f"(reported={source.start_char}:{source.end_char}, "
-                    f"quote_length={len(source.quote)}, exact_matches={matches})"
-                )
+    grounded = canonicalize_source_spans(
+        result,
+        {MEMORY_MESSAGE_ID: MEMORY_TEXT},
+        MEMORY_MESSAGE_ID,
+    )
+    return grounded.extraction, grounded.corrected_offset_count
 
 
 def git_commit() -> str:
@@ -147,9 +136,10 @@ def main() -> int:
         )
         extraction: MemoryExtractionResult | None = None
         extraction_ms: int | None = None
+        corrected_offset_count = 0
         if args.case == "memory-between-turns":
             extraction, extraction_ms = asyncio.run(extract_memory(settings))
-            validate_smoke(extraction)
+            extraction, corrected_offset_count = validate_smoke(extraction)
         second_messages = [
             *CHAT_MESSAGES,
             {"role": "assistant", "content": first_answer},
@@ -180,6 +170,7 @@ def main() -> int:
         "first_chat": first_metrics,
         "second_chat": second_metrics,
         "memory_extraction_ms": extraction_ms,
+        "memory_corrected_offset_count": corrected_offset_count,
         "memory_candidate_count": len(extraction.candidates) if extraction else 0,
         "memory_candidates": (
             [
