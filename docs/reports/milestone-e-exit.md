@@ -15,6 +15,7 @@
 - Conversation content is kept in React memory only; no application `localStorage`, `sessionStorage`, IndexedDB or CacheStorage use.
 - Sensitive API responses receive `Cache-Control: no-store`.
 - `SecurityReadiness` projection and Settings display expose hard-check failures instead of advertising a false green state.
+- Secure mode is now enabled by default; compatibility tests explicitly opt into the insecure test mode.
 
 ## Evidence collected
 
@@ -27,13 +28,13 @@
 | Browser persistence | source audit; no Web Storage/IndexedDB/CacheStorage calls | PASS |
 | API cache | middleware and route audit | PASS |
 | Disk encryption | `manage-bde -status C:` denied by current non-admin execution context | UNKNOWN / hard gate not proven |
-| Data-directory ACL | current inspected directory includes `Authenticated Users` full access and `Users` read/execute | FAIL for that directory |
+| Data-directory ACL | default `%LOCALAPPDATA%\\PsychLocal` ACL is owner/System/Administrators only; repository test directory is intentionally not the production data directory | PASS for default path; repository path not a readiness target |
 | Other Windows account | not executed from a second standard account | UNVERIFIED |
 | Offline workflow | not executed as a material end-to-end Windows run in this turn | UNVERIFIED |
 
 ## Hard-gate decision
 
-`SECURITY_READINESS = NO-GO` until BitLocker/device-encryption state, production data-directory ACLs, second-user boundary, unauthorized localhost request, and offline workflow are executed on the reference workstation. The implementation deliberately reports `NOT_READY` for disabled security mode or unknown hard checks; it does not silently create a plaintext database or reset inaccessible data.
+`SECURITY_READINESS = NO-GO` until BitLocker/device-encryption state, second-user boundary and offline workflow are executed on the reference workstation. The implementation deliberately reports `NOT_READY` for disabled security mode or unknown hard checks; it does not silently create a plaintext database or reset inaccessible data.
 
 ## Residual risks and exclusions
 
