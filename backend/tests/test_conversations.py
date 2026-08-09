@@ -30,6 +30,7 @@ def settings_for(path: Path, **overrides: object) -> Settings:
         data_directory=path.parent / "runtime",
         database_path=path,
         model_expected_sha256="a" * 64,
+        security_enabled=False,
         **overrides,
     )
 
