@@ -49,10 +49,18 @@ def main() -> int:
     rng = random.Random(args.seed)
     key: dict[str, Any] = {"randomization_seed": args.seed, "pairs": {}}
     dimensions = [
-        "understanding", "fact_vs_interpretation", "non_acquiescence",
-        "uncertainty_handling", "alternative_explanations", "question_quality",
-        "non_diagnostic", "natural_style", "appropriate_length",
-        "unnecessary_structure", "unnecessary_repetition", "context_use",
+        "understanding",
+        "fact_vs_interpretation",
+        "non_acquiescence",
+        "uncertainty_handling",
+        "alternative_explanations",
+        "question_quality",
+        "non_diagnostic",
+        "natural_style",
+        "appropriate_length",
+        "unnecessary_structure",
+        "unnecessary_repetition",
+        "context_use",
         "conversational_pull",
     ]
     scores: dict[str, Any] = {"rubric_version": "a10.1", "pairs": {}}
@@ -68,7 +76,8 @@ def main() -> int:
         versions = [candidate, baseline] if swapped else [baseline, candidate]
         labels = [versions[0][scenario_id], versions[1][scenario_id]]
         key["pairs"][scenario_id] = {
-            "A": labels[0]["prompt_version"], "B": labels[1]["prompt_version"]
+            "A": labels[0]["prompt_version"],
+            "B": labels[1]["prompt_version"],
         }
         scores["pairs"][scenario_id] = {
             label: {dimension: None for dimension in dimensions} | {"notes": ""}
@@ -77,11 +86,24 @@ def main() -> int:
         user_text = "\n\n".join(
             f"{message['role']}: {message['content']}" for message in left["messages"]
         )
-        sections.extend([
-            "", f"## {scenario_id}", "", "### Conversation", "", user_text,
-            "", "### Réponse A", "", labels[0]["answer"],
-            "", "### Réponse B", "", labels[1]["answer"],
-        ])
+        sections.extend(
+            [
+                "",
+                f"## {scenario_id}",
+                "",
+                "### Conversation",
+                "",
+                user_text,
+                "",
+                "### Réponse A",
+                "",
+                labels[0]["answer"],
+                "",
+                "### Réponse B",
+                "",
+                labels[1]["answer"],
+            ]
+        )
 
     args.booklet.parent.mkdir(parents=True, exist_ok=True)
     args.key.parent.mkdir(parents=True, exist_ok=True)

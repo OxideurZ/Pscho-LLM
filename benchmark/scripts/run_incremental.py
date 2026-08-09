@@ -202,7 +202,9 @@ def main() -> int:
             output.write(json.dumps(result, ensure_ascii=False, sort_keys=True) + "\n")
             output.flush()
             print(
-                args.mode, target, terminal,
+                args.mode,
+                target,
+                terminal,
                 f"input={metrics.get('input_tokens')}",
                 f"evaluated={metrics.get('evaluated_prompt_tokens')}",
                 f"reused={metrics.get('reused_prompt_tokens')}",
