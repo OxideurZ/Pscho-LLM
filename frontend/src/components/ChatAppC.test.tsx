@@ -1,11 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatApp } from "./ChatApp";
 
 const mocked = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 vi.mock("../chat/useChat", () => ({ useChat: () => mocked.value }));
 
 beforeAll(() => { Element.prototype.scrollIntoView = vi.fn(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 beforeEach(() => {
   mocked.value = {
@@ -26,6 +27,15 @@ describe("Milestone C conversation shell", () => {
     expect(mocked.value.selectConversation).toHaveBeenCalledWith("b");
     expect(mocked.value.newConversation).toHaveBeenCalledOnce();
     expect(screen.getByText("Interrompu")).toBeTruthy();
+  });
+
+  it("renames and archives through the explicitly labelled sidebar actions", () => {
+    vi.stubGlobal("prompt", vi.fn().mockReturnValue("Renommée"));
+    render(<ChatApp />);
+    fireEvent.click(screen.getByRole("button", { name: "Renommer Discussion A" }));
+    fireEvent.click(screen.getByRole("button", { name: "Archiver Discussion A" }));
+    expect(mocked.value.renameConversation).toHaveBeenCalledWith("a", "Renommée");
+    expect(mocked.value.archiveConversation).toHaveBeenCalledWith("a");
   });
 
   it("makes backend and engine failures distinct and offers bounded retry", () => {
