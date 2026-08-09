@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -50,3 +51,27 @@ async def test_restore_refuses_overwrite_and_corrupt_snapshot(tmp_path: Path) ->
     corrupt.write_bytes(b"not sqlite")
     with pytest.raises(BackupIntegrityError):
         await service.verify_snapshot(corrupt)
+
+
+@pytest.mark.asyncio
+async def test_encrypted_backup_is_unreadable_without_database_key(tmp_path: Path) -> None:
+    key = b"b" * 32
+    original = tmp_path / "encrypted" / "app.sqlite"
+    database = Database(original, REPOSITORY_ROOT / "migrations", encryption_key=key)
+    await database.migrate()
+    repository = ConversationRepository(database)
+    await repository.create("Backup chiffré")
+    service = BackupService(original, tmp_path / "backups", encryption_key=key)
+
+    snapshot = await service.create_snapshot()
+    with pytest.raises(sqlite3.DatabaseError):
+        sqlite3.connect(snapshot).execute("SELECT * FROM conversations").fetchall()
+
+    wrong_key_service = BackupService(original, tmp_path / "backups", encryption_key=b"w" * 32)
+    with pytest.raises(BackupIntegrityError):
+        await wrong_key_service.verify_snapshot(snapshot)
+
+    restored = await service.restore_snapshot(snapshot, tmp_path / "restored" / "app.sqlite")
+    restored_database = Database(restored, REPOSITORY_ROOT / "migrations", encryption_key=key)
+    await restored_database.migrate()
+    assert len(await ConversationRepository(restored_database).list(limit=10, offset=0)) == 1
