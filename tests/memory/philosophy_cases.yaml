@@ -1,0 +1,168 @@
+schema_version: "1.0"
+principles:
+  source_policy: user_only
+  precision_over_recall: true
+  assistant_contamination_allowed: false
+cases:
+  - id: personal_fact_epfl
+    gate: MUST_CAPTURE
+    messages:
+      - role: user
+        content: "J'étudie la physique à l'EPFL."
+    expected:
+      - kind: personal_fact
+        epistemic_status: stated
+
+  - id: explicit_goal_trail
+    gate: MUST_CAPTURE
+    messages:
+      - role: user
+        content: "Je veux courir ce trail en moins de 1h18."
+    expected:
+      - kind: goal
+        epistemic_status: stated
+
+  - id: interaction_preference
+    gate: MUST_CAPTURE
+    messages:
+      - role: user
+        content: "Je préfère les réponses détaillées."
+    expected:
+      - kind: preference
+        epistemic_status: stated
+
+  - id: dated_event
+    gate: MUST_CAPTURE
+    messages:
+      - role: user
+        content: "Hier je suis allé au cinéma."
+    expected:
+      - kind: event
+        epistemic_status: stated
+        temporal_text_required: true
+
+  - id: belief_bad_at_math
+    gate: MUST_LABEL
+    messages:
+      - role: user
+        content: "Je suis nul en maths."
+    expected:
+      - kind: belief
+        epistemic_status: stated
+    forbidden:
+      - kind: personal_fact
+
+  - id: interpreted_other_person
+    gate: MUST_LABEL
+    messages:
+      - role: user
+        content: "Je pense qu'il m'évite parce qu'il m'en veut."
+    expected:
+      - kind: belief
+        epistemic_status: interpretation
+    forbidden:
+      - kind: personal_fact
+
+  - id: explicitly_uncertain_goal
+    gate: MUST_LABEL
+    messages:
+      - role: user
+        content: "Je ne sais pas si je veux encore faire cette formation."
+    expected:
+      - kind: goal
+        epistemic_status: uncertain
+
+  - id: assistant_contamination_weak_acknowledgement
+    gate: MUST_NOT_CAPTURE
+    messages:
+      - role: assistant
+        content: "Tu cherches probablement beaucoup la validation des autres."
+      - role: user
+        content: "Peut-être."
+    expected: []
+    forbidden:
+      - kind: belief
+      - kind: personal_fact
+
+  - id: assistant_fear_contamination
+    gate: MUST_NOT_CAPTURE
+    messages:
+      - role: assistant
+        content: "Tu as peut-être peur de l'abandon."
+      - role: user
+        content: "Peut-être."
+    expected: []
+    forbidden:
+      - kind: belief
+      - kind: personal_fact
+
+  - id: trivial_ok
+    gate: MUST_NOT_CAPTURE
+    messages:
+      - role: user
+        content: "ok"
+    expected: []
+
+  - id: trivial_thanks
+    gate: MUST_NOT_CAPTURE
+    messages:
+      - role: user
+        content: "merci"
+    expected: []
+
+  - id: empty_no_speech
+    gate: MUST_NOT_CAPTURE
+    messages:
+      - role: user
+        content: "[aucune parole détectée]"
+    expected: []
+
+  - id: voice_preference
+    gate: MUST_CAPTURE
+    input_type: voice
+    messages:
+      - role: user
+        content: "J'aime courir."
+    expected:
+      - kind: preference
+        epistemic_status: stated
+        source_input_type: voice
+
+  - id: edited_voice_preference
+    gate: MUST_CAPTURE
+    input_type: voice
+    transcript_edited_by_user: true
+    messages:
+      - role: user
+        content: "Je préfère courir le matin."
+    expected:
+      - kind: preference
+        epistemic_status: stated
+        source_input_type: voice
+
+  - id: ambiguous_alex_identity
+    gate: ENTITY_SAFETY
+    messages:
+      - role: user
+        content: "Mon amie Alex habite Genève."
+      - role: user
+        content: "Mon collègue Alex travaille avec moi."
+    expected_entity_policy: keep_separate
+
+  - id: obvious_duplicate
+    gate: CONSOLIDATION
+    messages:
+      - role: user
+        content: "J'étudie à l'EPFL."
+      - role: user
+        content: "J'étudie à l'EPFL."
+    expected_consolidation: one_active_multiple_sources
+
+  - id: explicit_goal_update
+    gate: CONSOLIDATION
+    messages:
+      - role: user
+        content: "Je veux courir ce trail."
+      - role: user
+        content: "J'ai décidé de ne finalement pas participer."
+    expected_history_policy: preserve_old_and_represent_change
