@@ -1,7 +1,11 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.app.memory import MemoryExtractionResult, MemorySourceSpan
+from backend.app.memory import (
+    MemoryConsolidationProposal,
+    MemoryExtractionResult,
+    MemorySourceSpan,
+)
 
 
 def test_memory_extraction_schema_accepts_only_f_kinds_and_statuses() -> None:
@@ -72,3 +76,17 @@ def test_memory_extraction_schema_caps_candidates() -> None:
         MemoryExtractionResult.model_validate(
             {"schema_version": "1.0", "candidates": [candidate] * 9}
         )
+
+
+def test_consolidation_contract_allows_actions_but_never_rewritten_content() -> None:
+    proposal = MemoryConsolidationProposal(action="merge", target_memory_id="memory_1")
+    assert proposal.action == "merge"
+
+    with pytest.raises(ValidationError):
+        MemoryConsolidationProposal.model_validate(
+            {"action": "merge", "target_memory_id": "memory_1", "new_content": "invented"}
+        )
+    with pytest.raises(ValidationError):
+        MemoryConsolidationProposal(action="supersede")
+    with pytest.raises(ValidationError):
+        MemoryConsolidationProposal(action="activate", target_memory_id="memory_1")

@@ -65,3 +65,17 @@ class MemoryExtractionResult(BaseModel):
 
     schema_version: Literal["1.0"] = "1.0"
     candidates: list[MemoryCandidateDraft] = Field(default_factory=list, max_length=8)
+
+
+class MemoryConsolidationProposal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["activate", "merge", "supersede", "keep_separate", "reject"]
+    target_memory_id: str | None = Field(default=None, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_target(self) -> "MemoryConsolidationProposal":
+        requires_target = self.action in {"merge", "supersede"}
+        if requires_target != (self.target_memory_id is not None):
+            raise ValueError("target_memory_id is required only for merge or supersede")
+        return self

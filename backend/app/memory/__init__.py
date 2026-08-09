@@ -7,6 +7,7 @@ from backend.app.memory.grounding import (
 from backend.app.memory.models import (
     EpistemicStatus,
     MemoryCandidateDraft,
+    MemoryConsolidationProposal,
     MemoryExtractionResult,
     MemoryKind,
     MemorySourceSpan,
@@ -24,6 +25,7 @@ __all__ = [
     "GroundingError",
     "GroundingResult",
     "MemoryCandidateDraft",
+    "MemoryConsolidationProposal",
     "MemoryExtractionBatch",
     "MemoryExtractionResult",
     "MemoryExtractor",
