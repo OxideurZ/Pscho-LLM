@@ -23,10 +23,14 @@ export type VoiceBinding = {
   conversationId: string;
 };
 
+export type VoiceSignalState = "waiting" | "active" | "silent" | "muted";
+
 export const VOICE_AUTO_SEND_GRACE_MS = 1_500;
 const MAX_RECORDING_MS = 15 * 60 * 1_000;
+const MICROPHONE_PERMISSION_TIMEOUT_MS = 20_000;
 const NORMALIZED_SAMPLE_RATE = 16_000;
 const UPLOAD_CHUNK_BYTES = 1_024 * 1_024;
+const IDLE_LEVELS = Array.from({ length: 20 }, () => 0.08);
 
 export function useVoiceRecorder(
   onSend: (text: string, binding: VoiceBinding) => Promise<void>,
@@ -35,7 +39,9 @@ export function useVoiceRecorder(
   const [state, setState] = useState<VoiceState>("idle");
   const [preview, setPreview] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [levels, setLevels] = useState<number[]>(() => Array.from({ length: 20 }, () => 0.08));
+  const [levels, setLevels] = useState<number[]>(() => [...IDLE_LEVELS]);
+  const [signalState, setSignalState] = useState<VoiceSignalState>("waiting");
+  const [microphoneLabel, setMicrophoneLabel] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -45,6 +51,8 @@ export function useVoiceRecorder(
   const elapsedTimer = useRef<number | null>(null);
   const animationFrame = useRef<number | null>(null);
   const visualContext = useRef<AudioContext | null>(null);
+  const visualSource = useRef<MediaStreamAudioSourceNode | null>(null);
+  const captureGeneration = useRef(0);
   const discardRecording = useRef(false);
   const previewEdited = useRef(false);
 
@@ -55,13 +63,16 @@ export function useVoiceRecorder(
     timeout.current = null;
     elapsedTimer.current = null;
     animationFrame.current = null;
+    visualSource.current?.disconnect();
+    visualSource.current = null;
     if (visualContext.current) void visualContext.current.close();
     visualContext.current = null;
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
     recorder.current = null;
     parts.current = [];
-    setLevels(Array.from({ length: 20 }, () => 0.08));
+    setLevels([...IDLE_LEVELS]);
+    setSignalState("waiting");
   }, []);
 
   const poll = useCallback(async (voiceInputId: string) => {
@@ -114,9 +125,9 @@ export function useVoiceRecorder(
   }, [autoSend, preview, send, state]);
 
   const uploadAndTranscribe = useCallback(
-    async (frozen: VoiceBinding) => {
+    async (frozen: VoiceBinding, mimeType: string) => {
       try {
-        const wav = await mediaPartsToWav(parts.current);
+        const wav = await mediaPartsToWav(parts.current, mimeType);
         release();
         await createVoiceJob(frozen.voiceInputId, frozen.conversationId, frozen.clientTurnId);
         for (let offset = 0; offset < wav.size; offset += UPLOAD_CHUNK_BYTES) {
@@ -155,15 +166,47 @@ export function useVoiceRecorder(
         conversationId,
       };
       binding.current = frozen;
+      const currentGeneration = captureGeneration.current + 1;
+      captureGeneration.current = currentGeneration;
       try {
-        stream.current = await navigator.mediaDevices.getUserMedia({
-          audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true },
-        });
-        startVisualiser(stream.current, visualContext, animationFrame, setLevels);
-        const preferredMime = "audio/webm;codecs=opus";
-        recorder.current = MediaRecorder.isTypeSupported(preferredMime)
-          ? new MediaRecorder(stream.current, { mimeType: preferredMime })
-          : new MediaRecorder(stream.current);
+        if (!window.isSecureContext) throw new VoiceCaptureError("MIC_INSECURE_CONTEXT");
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new VoiceCaptureError("MIC_BROWSER_UNSUPPORTED");
+        }
+
+        // Create and resume Web Audio synchronously from the click gesture. Creating it only after
+        // the permission promise resolves leaves it suspended in several Chromium configurations.
+        const context = new AudioContext();
+        visualContext.current = context;
+        const initialResume = context.state === "suspended"
+          ? context.resume().catch(() => undefined)
+          : Promise.resolve();
+
+        const capturedStream = await requestMicrophone();
+        if (captureGeneration.current !== currentGeneration) {
+          capturedStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        stream.current = capturedStream;
+        const audioTrack = capturedStream.getAudioTracks()[0];
+        if (!audioTrack || audioTrack.readyState !== "live") {
+          throw new VoiceCaptureError("MIC_TRACK_UNAVAILABLE");
+        }
+        setMicrophoneLabel(audioTrack.label || "Microphone système");
+        await initialResume;
+        if (context.state === "suspended") await context.resume();
+        if (context.state !== "running") {
+          throw new VoiceCaptureError("MIC_AUDIO_CONTEXT_BLOCKED");
+        }
+        startVisualiser(
+          capturedStream,
+          context,
+          visualSource,
+          animationFrame,
+          setLevels,
+          setSignalState,
+        );
+        recorder.current = createMediaRecorder(capturedStream);
         parts.current = [];
         recorder.current.ondataavailable = (event) => {
           if (event.data.size) parts.current.push(event.data);
@@ -173,7 +216,8 @@ export function useVoiceRecorder(
             release();
             return;
           }
-          void uploadAndTranscribe(frozen);
+          const mimeType = recorder.current?.mimeType || parts.current[0]?.type || "audio/webm";
+          void uploadAndTranscribe(frozen, mimeType);
         };
         recorder.current.start(1_000);
         setState("recording");
@@ -186,6 +230,7 @@ export function useVoiceRecorder(
         timeout.current = window.setTimeout(stop, MAX_RECORDING_MS);
       } catch (caught) {
         release();
+        if (captureGeneration.current !== currentGeneration) return;
         setError(errorCode(caught, "MICROPHONE_UNAVAILABLE"));
         setState("error");
       }
@@ -201,6 +246,7 @@ export function useVoiceRecorder(
   const cancel = useCallback(async () => {
     const frozen = binding.current;
     if (state === "recording" || state === "requesting_permission") {
+      captureGeneration.current += 1;
       discardRecording.current = true;
       recorder.current?.stop();
       release();
@@ -244,6 +290,8 @@ export function useVoiceRecorder(
     setPreview: updatePreview,
     error,
     levels,
+    signalState,
+    microphoneLabel,
     elapsedSeconds,
     start,
     stop,
@@ -252,36 +300,100 @@ export function useVoiceRecorder(
   };
 }
 
+class VoiceCaptureError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
+
+async function requestMicrophone(): Promise<MediaStream> {
+  let timedOut = false;
+  let timer: number | null = null;
+  const request = navigator.mediaDevices.getUserMedia({
+    audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true },
+  }).then((capturedStream) => {
+    if (timedOut) {
+      capturedStream.getTracks().forEach((track) => track.stop());
+      throw new VoiceCaptureError("MIC_PERMISSION_TIMEOUT");
+    }
+    return capturedStream;
+  });
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = window.setTimeout(() => {
+      timedOut = true;
+      reject(new VoiceCaptureError("MIC_PERMISSION_TIMEOUT"));
+    }, MICROPHONE_PERMISSION_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([request, deadline]);
+  } finally {
+    if (timer !== null) window.clearTimeout(timer);
+  }
+}
+
+function createMediaRecorder(mediaStream: MediaStream): MediaRecorder {
+  const candidates = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
+  const mimeType = candidates.find((candidate) => MediaRecorder.isTypeSupported?.(candidate));
+  return mimeType
+    ? new MediaRecorder(mediaStream, { mimeType })
+    : new MediaRecorder(mediaStream);
+}
+
 function startVisualiser(
   mediaStream: MediaStream,
-  contextRef: { current: AudioContext | null },
+  context: AudioContext,
+  sourceRef: { current: MediaStreamAudioSourceNode | null },
   frameRef: { current: number | null },
   setLevels: (levels: number[]) => void,
+  setSignalState: (state: VoiceSignalState) => void,
 ) {
-  const context = new AudioContext();
   const analyser = context.createAnalyser();
-  analyser.fftSize = 64;
-  context.createMediaStreamSource(mediaStream).connect(analyser);
-  const data = new Uint8Array(analyser.frequencyBinCount);
-  contextRef.current = context;
-  const paint = () => {
-    analyser.getByteFrequencyData(data);
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.65;
+  const source = context.createMediaStreamSource(mediaStream);
+  source.connect(analyser);
+  sourceRef.current = source;
+  const data = new Uint8Array(analyser.fftSize);
+  const track = mediaStream.getAudioTracks()[0];
+  const startedAt = Date.now();
+  let previousPaint = 0;
+  const paint = (timestamp: number) => {
+    if (timestamp - previousPaint < 70) {
+      frameRef.current = window.requestAnimationFrame(paint);
+      return;
+    }
+    previousPaint = timestamp;
+    analyser.getByteTimeDomainData(data);
     const bars = Array.from({ length: 20 }, (_unused, index) => {
       const start = Math.floor((index * data.length) / 20);
       const end = Math.max(start + 1, Math.floor(((index + 1) * data.length) / 20));
-      const average = data.slice(start, end).reduce((sum, value) => sum + value, 0) / (end - start);
-      return Math.max(0.08, Math.min(1, average / 180));
+      let peak = 0;
+      for (let sample = start; sample < end; sample += 1) {
+        peak = Math.max(peak, Math.abs(data[sample] - 128) / 128);
+      }
+      return Math.max(0.08, Math.min(1, peak * 3.5));
     });
+    const rms = Math.sqrt(
+      data.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / data.length,
+    );
     setLevels(bars);
+    if (!track || track.muted || track.readyState !== "live") setSignalState("muted");
+    else if (rms >= 0.008) setSignalState("active");
+    else if (Date.now() - startedAt >= 2_000) setSignalState("silent");
+    else setSignalState("waiting");
     frameRef.current = window.requestAnimationFrame(paint);
   };
-  paint();
+  frameRef.current = window.requestAnimationFrame(paint);
 }
 
 function errorCode(error: unknown, fallback: string): string {
+  if (error instanceof VoiceCaptureError) return error.code;
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") return "MIC_PERMISSION_DENIED";
     if (error.name === "NotFoundError") return "MIC_UNAVAILABLE";
+    if (error.name === "NotReadableError") return "MIC_DEVICE_BUSY";
+    if (error.name === "AbortError") return "MIC_DEVICE_BUSY";
+    if (error.name === "EncodingError") return "AUDIO_DECODE_FAILED";
   }
   if (typeof error === "object" && error !== null && "code" in error) {
     const code = (error as { code?: unknown }).code;
@@ -290,8 +402,11 @@ function errorCode(error: unknown, fallback: string): string {
   return fallback;
 }
 
-async function mediaPartsToWav(parts: Blob[]): Promise<Blob> {
-  const source = new Blob(parts, { type: "audio/webm" });
+async function mediaPartsToWav(parts: Blob[], mimeType: string): Promise<Blob> {
+  if (!parts.length || parts.every((part) => part.size === 0)) {
+    throw new VoiceCaptureError("AUDIO_EMPTY");
+  }
+  const source = new Blob(parts, { type: mimeType });
   const context = new AudioContext();
   try {
     const decoded = await context.decodeAudioData(await source.arrayBuffer());

@@ -1,4 +1,4 @@
-import { CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ConversationRecord, offloadRuntime } from "../api/chat";
 import { useChat } from "../chat/useChat";
 import { useVoiceRecorder } from "../voice/useVoiceRecorder";
@@ -131,13 +131,20 @@ export function ChatApp() {
 
 function VoiceControls({ enabled, selectedId, voice }: { enabled: boolean; selectedId: string | null; voice: ReturnType<typeof useVoiceRecorder> }) {
   if (voice.state === "transcript_ready") return <section className="voice-preview" aria-label="Aperçu de la dictée"><label htmlFor="voice-preview">Transcription prête — modifiez-la ou envoyez-la</label><textarea id="voice-preview" value={voice.preview} onChange={(event) => voice.setPreview(event.target.value)} rows={3} /><span><button className="voice-primary" type="button" onClick={() => void voice.send()}>Envoyer la dictée</button><button className="voice-secondary" type="button" onClick={() => void voice.cancel()}>Annuler</button></span></section>;
+  if (voice.state === "requesting_permission") return <section className="voice-permission" aria-live="polite"><span className="voice-spinner" aria-hidden="true" /><div><strong>Autorisation du microphone…</strong><small>Acceptez la demande du navigateur. Si elle n’apparaît pas, vérifiez l’icône microphone près de l’adresse.</small></div><button className="voice-secondary" type="button" onClick={() => void voice.cancel()}>Annuler</button></section>;
   if (voice.state === "recording") return <RecordingPanel voice={voice} />;
   if (voice.state === "transcribing" || voice.state === "cancel_requested") return <section className="voice-progress" aria-live="polite"><span className="voice-spinner" aria-hidden="true" /><div><strong>{voice.state === "cancel_requested" ? "Annulation en cours" : "Transcription locale en cours"}</strong><small>{voice.state === "cancel_requested" ? "Le fichier audio est en cours de suppression." : "Votre dictée reste sur cette machine."}</small></div><button className="voice-secondary" type="button" onClick={() => void voice.cancel()}>Annuler</button></section>;
   return <section className="voice-idle"><div><strong>Dicter un message</strong><small>Microphone local · transcription hors ligne</small></div><button className="voice-record-button" type="button" disabled={!enabled || !selectedId} onClick={() => selectedId && void voice.start(selectedId)}><span aria-hidden="true">●</span> Commencer à dicter</button>{voice.error && <p className="voice-error" role="alert">{voiceErrorMessage(voice.error)}</p>}</section>;
 }
 
 function RecordingPanel({ voice }: { voice: ReturnType<typeof useVoiceRecorder> }) {
-  return <section className="voice-recording" aria-live="polite"><div className="voice-recording-head"><span className="recording-dot" aria-hidden="true" /><div><strong>Enregistrement en cours</strong><small>{formatDuration(voice.elapsedSeconds)} · votre voix est captée localement</small></div><span className="recording-limit">15 min max.</span></div><div className="voice-wave" aria-label="Niveau du microphone">{voice.levels.map((level, index) => <i key={index} style={{ "--voice-level": level } as CSSProperties} />)}</div><div className="voice-actions"><button className="voice-primary" type="button" onClick={() => voice.stop()}>Terminer et transcrire</button><button className="voice-secondary" type="button" onClick={() => void voice.cancel()}>Annuler</button></div></section>;
+  const signal = {
+    waiting: "Initialisation du signal…",
+    active: "Voix détectée",
+    silent: "Micro ouvert, mais aucun son détecté — parlez près du micro",
+    muted: "Le micro ne fournit aucun signal — vérifiez Windows ou le bouton muet",
+  }[voice.signalState];
+  return <section className="voice-recording" aria-live="polite"><div className="voice-recording-head"><span className="recording-dot" aria-hidden="true" /><div><strong>Enregistrement en cours</strong><small>{formatDuration(voice.elapsedSeconds)} · {voice.microphoneLabel ?? "microphone local"}</small></div><span className="recording-limit">15 min max.</span></div><div className="voice-wave" aria-label="Niveau du microphone">{voice.levels.map((level, index) => <i key={index} style={{ height: `${Math.round(8 + level * 48)}px` }} />)}</div><p className={`voice-signal voice-signal-${voice.signalState}`}><span aria-hidden="true" />{signal}</p><div className="voice-actions"><button className="voice-primary" type="button" onClick={() => voice.stop()}>Terminer et transcrire</button><button className="voice-secondary" type="button" onClick={() => void voice.cancel()}>Annuler</button></div></section>;
 }
 
 function formatDuration(totalSeconds: number) { return `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`; }
@@ -145,7 +152,14 @@ function formatDuration(totalSeconds: number) { return `${String(Math.floor(tota
 function voiceErrorMessage(code: string) {
   const messages: Record<string, string> = {
     MIC_PERMISSION_DENIED: "L’accès au microphone a été refusé. Autorisez-le dans votre navigateur puis réessayez.",
+    MIC_PERMISSION_TIMEOUT: "Le navigateur n’a pas répondu à la demande du micro. Vérifiez l’autorisation près de la barre d’adresse, puis réessayez.",
     MIC_UNAVAILABLE: "Aucun microphone utilisable n’a été trouvé sur cette machine.",
+    MIC_TRACK_UNAVAILABLE: "Le microphone a été ouvert, mais sa piste audio est indisponible.",
+    MIC_DEVICE_BUSY: "Le microphone est déjà utilisé ou bloqué par Windows. Fermez l’autre application puis réessayez.",
+    MIC_AUDIO_CONTEXT_BLOCKED: "Le navigateur a bloqué l’analyse audio. Cliquez à nouveau sur Commencer à dicter.",
+    MIC_BROWSER_UNSUPPORTED: "Ce navigateur ne permet pas la capture du microphone. Utilisez Chrome, Edge ou Firefox à jour.",
+    MIC_INSECURE_CONTEXT: "Le microphone exige une page locale sécurisée. Ouvrez Psych-local via start.ps1.",
+    AUDIO_EMPTY: "Le navigateur n’a produit aucun son. Vérifiez le microphone sélectionné puis réessayez.",
     AUDIO_DECODE_FAILED: "Le navigateur n’a pas pu préparer cet enregistrement. Réessayez avec Chrome ou Edge à jour.",
     STT_NO_SPEECH: "Aucune parole exploitable n’a été détectée. Rapprochez-vous du micro et réessayez.",
     STT_UNAVAILABLE: "Le moteur local de transcription n’est pas disponible.",
