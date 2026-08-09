@@ -1,20 +1,24 @@
 # Psych-local
 
-Psych-local est un environnement local de recherche conversationnelle. La Milestone A construit
-une seule tranche verticale : **CHAT · STREAM · STOP · CRASH · RECOVER · MEASURE · EVALUATE**.
+Psych-local est un environnement local de recherche conversationnelle. La Milestone B ajoute à la
+tranche locale validée en A une histoire durable : **PERSIST · ORDER · RETRY · CHECKPOINT ·
+RECONCILE · RESUME · MIGRATE · BACKUP**.
 
-> Milestone A ne contient aucune mémoire persistante, aucune transcription vocale et aucune
-> fonctionnalité thérapeutique complète.
+> Milestone B utilise uniquement des données artificielles ou non sensibles. Elle ne contient ni
+> mémoire autobiographique globale, ni transcription vocale, ni fonctionnalité thérapeutique
+> complète et n'autorise pas encore l'usage de données personnelles sensibles réelles.
 
 Le navigateur envoie les messages à FastAPI, qui ajoute un prompt versionné puis délègue la
 génération par HTTP à un processus `llama-server` indépendant. FastAPI ne charge jamais le GGUF.
-Chaque tentative produit avant l’appel réseau un run technique SQLite sans conserver le texte de
-la conversation.
+Chaque tour réserve atomiquement en SQLite son USER, son `model_run` et son ASSISTANT avant le
+premier appel réseau. Les réponses streamées sont checkpointées puis finalisées honnêtement.
 
 ```text
 React/Vite ──POST SSE──> FastAPI ──LLMBackend──> llama-server ──> GGUF
                              │
-                             └── RunRegistry + SQLite model_runs
+                             ├── ConversationService + ContextBuilder
+                             ├── SummaryService + RunRegistry
+                             └── SQLite (WAL, migrations, backups)
 ```
 
 ## Prérequis
@@ -59,6 +63,16 @@ pnpm install --frozen-lockfile
 
 Copier `.env.example` vers `.env`. Tous les services sont liés à `127.0.0.1` par défaut ; ne pas
 les exposer sur `0.0.0.0` pendant cette milestone.
+
+À partir de Milestone B, la base et les artefacts runtime vivent hors du dépôt. Sous Windows, le
+répertoire par défaut est `%LOCALAPPDATA%\PsychLocal\` et la base se trouve dans
+`data\app.sqlite`. `DATA_DIRECTORY` et `DATABASE_PATH` permettent uniquement de rediriger ces
+chemins, notamment vers un dossier temporaire pour les tests.
+
+Les migrations SQL de `migrations/` sont appliquées dans l'ordre strict. Leur nom et leur SHA256
+sont enregistrés dans `schema_migrations` ; modifier une migration déjà appliquée empêche le
+backend de devenir ready. Toutes les connexions applicatives vérifient `foreign_keys=ON`, le mode
+WAL et le `busy_timeout` configuré.
 
 ## Préparer llama.cpp et le modèle
 
@@ -109,17 +123,61 @@ Dans `frontend/` :
 pnpm run dev
 ```
 
-Ouvrir `http://127.0.0.1:5173`. Les quatre seules routes publiques de A sont :
+Ouvrir `http://127.0.0.1:5173`. L'API A reste compatible et B ajoute les routes persistantes :
 
 ```text
 GET  /v1/health
 GET  /v1/models
 POST /v1/chat
 POST /v1/runs/{run_id}/cancel
+
+POST   /v1/conversations
+GET    /v1/conversations
+GET    /v1/conversations/{id}
+PATCH  /v1/conversations/{id}
+DELETE /v1/conversations/{id}
+GET    /v1/conversations/{id}/messages
+POST   /v1/conversations/{id}/turns
 ```
 
 `/v1/health` reste disponible et passe à `degraded` si `llama-server` s’arrête. Son redémarrage est
 détecté sans redémarrer FastAPI.
+
+## Persistance et recovery
+
+Le frontend conserve le `conversation_id` courant dans le stockage local du navigateur et génère
+un UUID `client_turn_id` par tour. Réenvoyer le même UUID retrouve le tour existant : il ne crée ni
+nouveau USER, ni nouvel ASSISTANT, ni nouveau run. Une conversation refuse un autre tour actif avec
+`409 CONVERSATION_BUSY`.
+
+L'ordre logique dépend exclusivement de `sequence_no`. USER et ASSISTANT reçoivent deux positions
+adjacentes dans une transaction `BEGIN IMMEDIATE`. Le streaming conserve un buffer RAM et écrit un
+checkpoint au premier seuil atteint : une seconde ou 512 caractères par défaut. Il n'y a jamais une
+écriture par token. Une annulation produit un ASSISTANT `interrupted`; une panne produit `failed` et
+conserve le dernier contenu checkpointé.
+
+Au démarrage, après les migrations et avant l'état DB `ready`, la reconciliation transforme tout
+ancien run `starting`/`generating` et son ASSISTANT `streaming` en état `failed` avec
+`PROCESS_INTERRUPTED`. Le texte checkpointé reste intact.
+
+## Contexte et rolling summaries
+
+`ContextBuilder` reconstruit uniquement la conversation demandée, en ordre de séquence, avec le
+USER courant exactement une fois. Un contexte court utilise les messages bruts. Lorsque le budget
+ne tient plus, il combine le prompt système, un rolling summary JSON validé et les messages récents.
+Le compteur conservateur utilise les octets UTF-8 plus un coût de framing : c'est une borne haute
+pour le tokenizer byte-fallback épinglé, pas une estimation présentée comme exacte.
+
+Politique des messages partiels : ASSISTANT `interrupted` est inclus si son contenu existe;
+ASSISTANT `failed` est inclus seulement avec un contenu non vide; `deleted`, `streaming` et tout
+message `excluded_from_ai` sont exclus. Les messages bruts ne sont jamais supprimés par un résumé.
+Chaque résumé possède un run `rolling_summary`, un prompt hashé, un parent et ses sources exactes.
+
+## Backup et restore
+
+`BackupService` utilise l'API de backup SQLite sur la base WAL active, jamais une copie brute du
+fichier. Un restore écrit vers une destination absente et vérifie obligatoirement
+`PRAGMA integrity_check` ainsi que `PRAGMA foreign_key_check` avant d'être accepté.
 
 ## Tests et qualité
 
@@ -132,9 +190,10 @@ pnpm test
 pnpm run build
 ```
 
-Les tests utilisent un faux backend : aucun modèle de 20,4 Go n’est nécessaire dans la CI. Les
-tests matériels d’annulation réelle, de crash/recovery et de libération du slot doivent toutefois
-être exécutés avec `llama-server` avant la décision de sortie.
+Les tests utilisent principalement un faux backend : aucun modèle de 20,4 Go n’est nécessaire dans
+la CI. La fermeture de B exige aussi des tests matériels avec le vrai `llama-server` couvrant la
+génération, l'annulation upstream, le kill moteur, le kill/restart FastAPI, le contexte long, les
+checkpoints et la reprise.
 
 Avec les deux services lancés, les smoke tests matériels sont disponibles explicitement :
 
@@ -144,6 +203,17 @@ python -m scripts.hardware_smoke crash --llama-pid 12345
 ```
 
 Le second tue volontairement le PID fourni et doit être suivi d’un redémarrage manuel du moteur.
+
+Pour la matrice B complète, laisser le runner lancer et arrêter ses propres processus locaux :
+
+```console
+python -m scripts.validate_milestone_b_hardware
+```
+
+Il utilise un data directory temporaire hors dépôt, vérifie le SHA du modèle, puis couvre en une
+séquence contrôlée le chat normal, Stop, rolling summary réel, kill/restart FastAPI, reconciliation,
+kill/restart moteur et reprise. Les résultats de référence sont dans
+[`docs/reports/milestone-b-hardware.json`](docs/reports/milestone-b-hardware.json).
 
 ## Benchmarks
 
@@ -167,7 +237,14 @@ Le premier rapport matériel contrôlé est disponible dans
 | --- | --- | --- |
 | `PSYCH_LOCAL_HOST` / `PORT` | `127.0.0.1` / `8000` | écoute FastAPI |
 | `LLAMA_SERVER_URL` | `http://127.0.0.1:8080` | moteur indépendant |
-| `DATABASE_PATH` | `psych-local.db` | runs techniques uniquement |
+| `DATA_DIRECTORY` | chemin applicatif de l'OS | racine data/backups/models/runtime/logs |
+| `DATABASE_PATH` | `<data>/data/app.sqlite` | conversations, messages, summaries et runs |
+| `SQLITE_BUSY_TIMEOUT_MS` | `30000` | attente maximale d'un verrou SQLite |
+| `SESSION_TIMEOUT_SECONDS` | `1800` | rotation temporelle des sessions |
+| `STREAM_CHECKPOINT_SECONDS` / `CHARACTERS` | `1` / `512` | premier seuil de checkpoint |
+| `CONTEXT_SAFETY_MARGIN_TOKENS` | `512` | marge réservée du contexte |
+| `SUMMARY_BUDGET_TOKENS` | `4096` | budget de sortie du rolling summary |
+| `RECENT_RAW_BUDGET_TOKENS` | `24000` | borne des messages bruts récents |
 | `PROMPT_ID` / `VERSION` | `conversation_system` / `0.1.2` | prompt versionné et hashé |
 | `MODEL_NAME` / `PATH` | baseline Qwen | identification locale |
 | `MODEL_EXPECTED_SHA256` | hash canonique | garde-fou benchmark |
@@ -177,7 +254,8 @@ Le premier rapport matériel contrôlé est disponible dans
 | `CONTEXT_SIZE` | `32768` | fenêtre de contexte déclarée |
 
 Le prompt complet, les messages et les réponses ne sont jamais inscrits dans `model_runs` ni dans
-les logs applicatifs. Seuls les identifiants, hashes, états, durées et compteurs de tokens le sont.
+les logs applicatifs. Les contenus conversationnels sont stockés uniquement dans les tables dédiées;
+les logs ne contiennent que les identifiants, hashes, états, durées et compteurs de tokens.
 
 ## Erreurs courantes
 
@@ -185,11 +263,17 @@ les logs applicatifs. Seuls les identifiants, hashes, états, durées et compteu
   lancé pendant son redémarrage.
 - `LLM_BACKEND_TIMEOUT` : vérifier la charge, la taille du contexte et les délais du moteur.
 - `LLM_BACKEND_PROTOCOL_ERROR` : vérifier que le build expose bien `/v1/chat/completions` en SSE.
+- `CONVERSATION_BUSY` : attendre ou annuler le tour actif de cette conversation.
+- `CONTEXT_BUDGET_EXCEEDED` : le USER courant ne tient pas dans le budget garanti.
+- `PROCESS_INTERRUPTED` : le startup a réparé un tour non terminal laissé par un ancien processus.
+- `MIGRATION_FAILED` / `SCHEMA_VERSION_INVALID` : ne pas supprimer la DB; restaurer les fichiers de
+  migration attendus ou appliquer une nouvelle migration corrective.
 - `SHA256 mismatch` : supprimer puis récupérer à nouveau le GGUF ; ne pas lancer de benchmark.
 - santé `degraded` : lire séparément les états `database` et `llm` dans la réponse JSON.
 
-## Limites de Milestone A
+## Limites de Milestone B
 
-Il n’existe volontairement ni conversations/sessions persistantes, ni messages en base, ni mémoire,
-retrieval, embeddings, microphone, Whisper, Tauri ou cloud. L’application n’est pas un dispositif
-médical et ne remplace pas un professionnel ou un service d’urgence.
+Il existe désormais des conversations, sessions, messages et summaries persistants, mais aucune
+Memory v1 cross-conversation, aucun retrieval, embedding, vector store, microphone, Whisper, Tauri,
+chiffrement final ou cloud. L’application n’est pas un dispositif médical et ne remplace pas un
+professionnel ou un service d’urgence.

@@ -1,0 +1,105 @@
+{
+  "schema": "milestone-b-hardware:v1.0",
+  "started_at_utc": "2026-08-09T11:21:05.7956362Z",
+  "configuration": {
+    "backend_implementation_commit": "ed32891",
+    "runtime_reported_git_commit_note": "The run started from the identical uncommitted backend tree before it was captured as ed32891; model_runs therefore report the prior HEAD 8da120b.",
+    "os": "Windows 11 10.0.26200",
+    "cpu": "Intel Core i7-10750H",
+    "ram_mib": 32606,
+    "gpu": "NVIDIA GeForce RTX 2070 Max-Q",
+    "gpu_vram_mib": 8191,
+    "llama_cpp_version": "b9637",
+    "llama_cpp_commit": "aedb2a5e9ca3d4064148bbb919e0ddc0c1b70ab3",
+    "model": "Qwen3.6-35B-A3B-Q4_K_M.gguf",
+    "model_sha256": "671e47e0ec53c665d048b98c3ecbfd5236b5ca9c3e02ed19fc8f81f7b85140c7",
+    "conversation_prompt": "conversation_system:v0.1.2",
+    "conversation_prompt_sha256": "5a23b62014bf5fed816007d28391e3a6318e344bf28bb79984fb387036a161c6",
+    "summary_prompt": "rolling_summary:v0.1.1",
+    "summary_prompt_sha256": "1b6978e4591fced7141f884dec75c0f3b6f1f7df8c965f324bbb98b24d1fe324",
+    "engine_context_size": 32768,
+    "application_context_size": 8192,
+    "checkpoint_seconds": 0.25,
+    "checkpoint_characters": 64,
+    "data_kind": "artificial non-sensitive fixtures only"
+  },
+  "normal_generation": {
+    "run_id": "run_0fe3380092eb4f6db6b95035bed1b1d1",
+    "events": ["run_started", "delta", "metrics", "done"],
+    "run_status": "complete",
+    "assistant_status": "complete",
+    "input_tokens": 413,
+    "output_tokens": 4
+  },
+  "real_cancel": {
+    "run_id": "run_669e57f17da94e9f9b6f57bc691d921b",
+    "events_terminal": "cancelled",
+    "run_status": "cancelled",
+    "assistant_status": "interrupted",
+    "persisted_characters": 66,
+    "upstream_closed": true,
+    "next_generation_status": "complete"
+  },
+  "long_context": {
+    "chat_run_id": "run_9b999f8bbe234f95b31e96a0c1f12166",
+    "chat_status": "complete",
+    "summary_id": "summary_db1234c4559b4b3f979f7943a90b0f85",
+    "summary_run_id": "run_c12f6e4d6af04dc88352887843492fb1",
+    "summary_status": "complete",
+    "summary_schema_version": "1.0",
+    "summary_json_bytes": 889,
+    "summary_sources": 6,
+    "user_stated_facts": ["TEST 0 CARIBOU", "TEST 1 CARIBOU", "TEST 2 CARIBOU"],
+    "assistant_proposals": [
+      "PROPOSITION 0 PROPOSITION",
+      "PROPOSITION 1 PROPOSITION",
+      "PROPOSITION 2 PROPOSITION"
+    ]
+  },
+  "fastapi_kill_and_restart": {
+    "run_id": "run_ef24df0fd6c442308bd7583868a3e9f9",
+    "emitted_characters_at_kill": ">=96",
+    "last_checkpoint_characters": 88,
+    "observed_checkpoint_loss_bound_characters": "8..63",
+    "status_before_restart": {"assistant": "streaming", "run": "generating"},
+    "status_after_restart": {
+      "assistant": "failed",
+      "run": "failed",
+      "error_code": "PROCESS_INTERRUPTED"
+    },
+    "database_ready_after_reconciliation": true,
+    "next_generation_run_id": "run_2bbcb3ad06d645eeb3dcb3ddbf489c57",
+    "next_generation_status": "complete"
+  },
+  "llama_kill_and_restart": {
+    "failed_run_id": "run_453dedc4a6174264969ec268e9ffe3da",
+    "assistant_status": "failed",
+    "run_status": "failed",
+    "error_code": "LLM_GENERATION_FAILED",
+    "persisted_characters": 65,
+    "fastapi_stayed_running": true,
+    "health_without_engine": "degraded",
+    "health_after_engine_restart": "healthy",
+    "fastapi_restarted_for_engine_recovery": false,
+    "recovery_run_id": "run_9ab7c4d973684c2092c46b5e395d2ad8",
+    "recovery_events": ["run_started", "delta", "metrics", "done"],
+    "recovery_content": "OK",
+    "recovery_status": "complete"
+  },
+  "final_database": {
+    "schema_version": 7,
+    "conversations": 4,
+    "messages": 22,
+    "summaries": 1,
+    "model_runs": 12,
+    "nonterminal_runs": 0,
+    "streaming_messages": 0,
+    "integrity_check": "ok",
+    "foreign_key_violations": 0
+  },
+  "harness_notes": {
+    "initial_v0_1_0_attempt": "Two real rolling-summary runs were rejected as SUMMARY_VALIDATION_FAILED; v0.1.0 was retained unchanged.",
+    "v0_1_1_resolution": "The versioned prompt requires USER keyword preservation and the validator rejects assistant-only factual terms; the next single long-context run passed.",
+    "continuation": "The main harness reached the engine-kill gate but its 2 s observer timeout matched the API's 2 s engine probe. A targeted continuation on the same database used a 5 s observer timeout to capture degraded -> healthy and the successful recovery turn."
+  }
+}
