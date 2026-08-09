@@ -1,3 +1,4 @@
+import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -13,6 +14,15 @@ from backend.app.memory.models import MemoryCandidateDraft, MemoryExtractionResu
 
 def memory_id(prefix: str) -> str:
     return f"{prefix}_{uuid4().hex}"
+
+
+def normalize_level0(content: str) -> str:
+    normalized = unicodedata.normalize("NFKC", content).casefold()
+    without_punctuation = "".join(
+        " " if unicodedata.category(character).startswith("P") else character
+        for character in normalized
+    )
+    return " ".join(without_punctuation.split())
 
 
 @dataclass(frozen=True)
@@ -127,6 +137,11 @@ class MemoryRepository:
         if grounded_draft is not None and await self._is_tombstoned(connection, grounded_draft):
             status = "suppressed"
             rejection_code = "SAME_SOURCE_TOMBSTONE"
+        if grounded_draft is not None and await self._is_disabled_source(
+            connection, grounded_draft
+        ):
+            status = "suppressed"
+            rejection_code = "SAME_SOURCE_DISABLED"
         if status == "accepted":
             memory_identifier = memory_id("memory")
 
@@ -224,6 +239,7 @@ class MemoryRepository:
                     now,
                 ),
             )
+        await self._consolidate_level0(connection, candidate_id, memory_identifier)
 
     @staticmethod
     async def _is_tombstoned(connection: aiosqlite.Connection, draft: MemoryCandidateDraft) -> bool:
@@ -241,3 +257,103 @@ class MemoryRepository:
             if row is not None:
                 return True
         return False
+
+    @staticmethod
+    async def _is_disabled_source(
+        connection: aiosqlite.Connection, draft: MemoryCandidateDraft
+    ) -> bool:
+        for span in draft.source_spans:
+            row = await (
+                await connection.execute(
+                    """
+                    SELECT 1
+                    FROM memory_sources AS source
+                    JOIN memory_items AS memory ON memory.id = source.memory_id
+                    WHERE source.message_id = ? AND source.start_char = ? AND source.end_char = ?
+                      AND memory.kind = ? AND memory.status = 'disabled'
+                    LIMIT 1
+                    """,
+                    (span.message_id, span.start_char, span.end_char, draft.kind.value),
+                )
+            ).fetchone()
+            if row is not None:
+                return True
+        return False
+
+    @staticmethod
+    async def _consolidate_level0(
+        connection: aiosqlite.Connection, candidate_id: str, memory_identifier: str
+    ) -> None:
+        connection.row_factory = aiosqlite.Row
+        current = await (
+            await connection.execute(
+                "SELECT * FROM memory_items WHERE id = ? AND status = 'provisional'",
+                (memory_identifier,),
+            )
+        ).fetchone()
+        if current is None:
+            return
+        rows = await (
+            await connection.execute(
+                """
+                SELECT * FROM memory_items
+                WHERE id <> ? AND kind = ? AND status IN ('active', 'provisional')
+                ORDER BY created_at ASC, id ASC
+                """,
+                (memory_identifier, current["kind"]),
+            )
+        ).fetchall()
+        normalized = normalize_level0(str(current["content"]))
+        target = next(
+            (row for row in rows if normalize_level0(str(row["content"])) == normalized),
+            None,
+        )
+        now = datetime.now(UTC).isoformat()
+        if target is None:
+            await connection.execute(
+                "UPDATE memory_items SET status = 'active', updated_at = ? WHERE id = ?",
+                (now, memory_identifier),
+            )
+            return
+        source_rows = await (
+            await connection.execute(
+                "SELECT * FROM memory_sources WHERE memory_id = ?", (memory_identifier,)
+            )
+        ).fetchall()
+        for source in source_rows:
+            await connection.execute(
+                """
+                INSERT OR IGNORE INTO memory_sources(
+                    memory_id, message_id, start_char, end_char,
+                    text_sha256, source_role, created_at
+                ) VALUES (?, ?, ?, ?, ?, 'reinforcement', ?)
+                """,
+                (
+                    target["id"],
+                    source["message_id"],
+                    source["start_char"],
+                    source["end_char"],
+                    source["text_sha256"],
+                    now,
+                ),
+            )
+        await connection.execute(
+            """
+            UPDATE memory_items
+            SET status = 'merged', merged_into_memory_id = ?, updated_at = ?
+            WHERE id = ? AND status = 'provisional'
+            """,
+            (target["id"], now, memory_identifier),
+        )
+        await connection.execute(
+            """
+            UPDATE memory_items
+            SET last_supported_at = MAX(last_supported_at, ?), updated_at = ?
+            WHERE id = ?
+            """,
+            (current["last_supported_at"], now, target["id"]),
+        )
+        await connection.execute(
+            "UPDATE memory_candidates SET accepted_memory_id = ? WHERE id = ?",
+            (target["id"], candidate_id),
+        )

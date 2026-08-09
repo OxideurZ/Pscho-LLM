@@ -91,6 +91,7 @@ async def queued_turn(path: Path) -> tuple[Database, dict[str, str]]:
     conversations = ConversationRepository(database)
     conversation = await conversations.create()
     identifiers = {
+        "conversation_id": conversation.id,
         "user_message_id": new_id("msg"),
         "assistant_message_id": new_id("msg"),
         "session_id": new_id("session"),
@@ -144,7 +145,7 @@ async def run_extractor(database: Database, backend: StructuredBackend, settings
 
 
 @pytest.mark.asyncio
-async def test_extractor_uses_user_only_context_and_creates_provisional_memory(
+async def test_extractor_uses_user_only_context_and_creates_active_memory(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "app.sqlite"
@@ -173,7 +174,7 @@ async def test_extractor_uses_user_only_context_and_creates_provisional_memory(
         ).fetchone()
 
     assert candidate["status"] == "accepted"
-    assert memory["status"] == "provisional"
+    assert memory["status"] == "active"
     assert source["message_id"] == ids["user_message_id"]
     assert source["end_char"] == len("Je préfère les réponses détaillées.")
     assert tuple(run) == ("memory_extract", "complete", "0.1.2")
@@ -196,3 +197,72 @@ async def test_invalid_exact_quote_is_audited_without_creating_memory(tmp_path: 
 
     assert candidate == ("invalid", "SOURCE_SPAN_MISMATCH")
     assert memory_count == (0,)
+
+
+@pytest.mark.asyncio
+async def test_exact_duplicate_merges_into_one_active_memory_with_two_sources(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "app.sqlite"
+    database, first_ids = await queued_turn(path)
+    await run_extractor(
+        database,
+        StructuredBackend("Je préfère les réponses détaillées."),
+        settings_for(path),
+    )
+    conversations = ConversationRepository(database)
+    second_ids = {
+        "user_message_id": new_id("msg"),
+        "assistant_message_id": new_id("msg"),
+        "session_id": new_id("session"),
+        "run_id": new_id("run"),
+        "job_id": new_id("job"),
+    }
+    await conversations.begin_turn(
+        conversation_id=first_ids["conversation_id"],
+        client_turn_id=str(uuid4()),
+        content="Je préfère les réponses détaillées.",
+        input_type="text",
+        ids=second_ids,
+        run_metadata=metadata(),
+        memory_job={
+            "id": second_ids["job_id"],
+            "priority": 0,
+            "dedupe_key": f"memory_extract:0.1.2:{second_ids['user_message_id']}",
+            "max_attempts": 3,
+        },
+    )
+    async with database.connect() as connection:
+        await connection.execute(
+            "UPDATE model_runs SET status = 'complete' WHERE id = ?", (second_ids["run_id"],)
+        )
+        await connection.execute(
+            "UPDATE messages SET status = 'complete', content = 'Réponse.' WHERE id = ?",
+            (second_ids["assistant_message_id"],),
+        )
+        await connection.commit()
+
+    await run_extractor(
+        database,
+        StructuredBackend("Je préfère les réponses détaillées."),
+        settings_for(path),
+    )
+
+    async with database.connect() as connection:
+        statuses = await (
+            await connection.execute(
+                "SELECT status, COUNT(*) FROM memory_items GROUP BY status ORDER BY status"
+            )
+        ).fetchall()
+        active_sources = await (
+            await connection.execute(
+                """
+                SELECT COUNT(*) FROM memory_sources AS source
+                JOIN memory_items AS memory ON memory.id = source.memory_id
+                WHERE memory.status = 'active'
+                """
+            )
+        ).fetchone()
+
+    assert statuses == [("active", 1), ("merged", 1)]
+    assert active_sources == (2,)
