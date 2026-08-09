@@ -61,7 +61,17 @@ export function MemoryPanel({ onOpenConversation }: { onOpenConversation: (id: s
   const edit = async () => {
     if (!selected) return;
     const content = window.prompt("Corriger cette mémoire", selected.content);
-    if (content?.trim()) { setSelected(await updateMemory(selected.id, { content: content.trim() })); await refresh(); }
+    if (!content?.trim()) return;
+    const kind = window.prompt("Type (personal_fact, event, goal, preference, belief)", selected.kind);
+    const epistemic = window.prompt("Statut (stated, interpretation, uncertain)", selected.epistemic_status);
+    if (!kind || !epistemic) return;
+    if (!(kind in kindLabels) || !(epistemic in statusLabels)) {
+      setError("Le type ou le statut épistémique est invalide."); return;
+    }
+    setSelected(await updateMemory(selected.id, {
+      content: content.trim(), kind: kind as MemoryDetail["kind"],
+      epistemic_status: epistemic as MemoryDetail["epistemic_status"],
+    })); await refresh();
   };
   const toggle = async () => {
     if (!selected) return;
@@ -112,7 +122,7 @@ export function MemoryPanel({ onOpenConversation }: { onOpenConversation: (id: s
         {!selected && <p className="memory-empty">Sélectionnez une mémoire pour voir pourquoi elle existe.</p>}
         {selected && <><div className="memory-detail-head"><span>{kindLabels[selected.kind]} · {statusLabels[selected.epistemic_status]}</span><h2>{selected.content}</h2>{Boolean(selected.user_locked) && <small>Corrigée et verrouillée par vous</small>}</div>
           <h3>Pourquoi ceci est-il mémorisé ?</h3><div className="memory-sources">{selected.sources.map((source) => <article key={`${source.message_id}-${source.start_char}`}><blockquote>{source.excerpt}</blockquote><small>{source.input_type === "voice" ? "Voix transcrite" : "Texte"} · {new Date(source.message_created_at).toLocaleString()} · {source.hash_valid ? "source vérifiée" : "source modifiée"}</small><button type="button" onClick={() => onOpenConversation(source.conversation_id)}>Ouvrir la conversation</button></article>)}</div>
-          <div className="memory-controls"><button type="button" onClick={() => void edit()}>Modifier</button><button type="button" onClick={() => void toggle()}>{selected.status === "disabled" ? "Réactiver" : "Désactiver"}</button><button className="danger" type="button" onClick={() => void remove()}>Supprimer</button></div><p className="memory-delete-note">La suppression n’efface pas les messages USER originaux.</p></>}
+          <div className="memory-controls"><button type="button" onClick={() => void edit()}>Modifier et classifier</button><button type="button" onClick={() => void toggle()}>{selected.status === "disabled" ? "Réactiver" : "Désactiver"}</button><button className="danger" type="button" onClick={() => void remove()}>Supprimer</button></div><p className="memory-delete-note">La suppression n’efface pas les messages USER originaux.</p></>}
       </div>
     </div>}
     {section === "entities" && <div className="entity-grid">{entities.map((entity) => <article key={entity.id}><span>{entity.entity_type} · {entity.resolution_status}</span><h2>{entity.display_name}</h2><p>{entity.linked_memory_count} mémoire(s) liée(s)</p><button type="button" onClick={async () => { const name = window.prompt("Nom affiché", entity.display_name); if (name?.trim()) { await renameEntity(entity.id, name.trim()); await refresh(); } }}>Renommer</button></article>)}</div>}

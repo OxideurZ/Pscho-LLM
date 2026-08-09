@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -977,6 +978,72 @@ class MemoryRepository:
             connection, candidate_id, memory_identifier
         )
         await self._persist_entities(connection, active_memory_id, grounded_draft)
+        if active_memory_id == memory_identifier:
+            await self._supersede_explicit_location_change(
+                connection, memory_identifier, target, grounded_draft
+            )
+
+    @staticmethod
+    async def _supersede_explicit_location_change(
+        connection: aiosqlite.Connection,
+        new_memory_id: str,
+        target: MemoryUserSource,
+        draft: MemoryCandidateDraft,
+    ) -> None:
+        """Handle one deliberately narrow, explicit current-residence update.
+
+        Anything uncertain, indirect, locked, or with more than one possible prior location
+        remains separate. This is a Level 1 deterministic action, not an inferred biography.
+        """
+        if draft.kind.value != "personal_fact":
+            return
+        normalized_target = " ".join(target.content.casefold().split())
+        uncertain_markers = ("peut-être", "peut etre", "envisage", "voudrais", "si je")
+        if any(marker in normalized_target for marker in uncertain_markers):
+            return
+        move = re.search(
+            r"\b(?:j['’]ai déménagé|je (?:vis|réside|habite) désormais|je vis maintenant)\s+à\s+([^.!?]+)",
+            normalized_target,
+        )
+        if move is None or move.group(1).strip() not in draft.content.casefold():
+            return
+        rows = await (
+            await connection.execute(
+                """
+                SELECT DISTINCT memory.id
+                FROM memory_items AS memory
+                JOIN memory_sources AS source ON source.memory_id = memory.id
+                JOIN messages AS message ON message.id = source.message_id
+                WHERE memory.id <> ? AND memory.status = 'active' AND memory.user_locked = 0
+                  AND memory.kind = 'personal_fact'
+                  AND (
+                    lower(message.content) LIKE '%j''habite à%'
+                    OR lower(message.content) LIKE '%je vis à%'
+                    OR lower(message.content) LIKE '%je réside à%'
+                  )
+                """,
+                (new_memory_id,),
+            )
+        ).fetchall()
+        if len(rows) != 1:
+            return
+        now = datetime.now(UTC).isoformat()
+        old_memory_id = str(rows[0][0])
+        await connection.execute(
+            """
+            UPDATE memory_items
+            SET status = 'superseded', superseded_by_memory_id = ?, valid_until = ?, updated_at = ?
+            WHERE id = ? AND status = 'active' AND user_locked = 0
+            """,
+            (new_memory_id, target.created_at, now, old_memory_id),
+        )
+        await connection.execute(
+            """
+            UPDATE memory_sources SET source_role = 'update'
+            WHERE memory_id = ? AND message_id = ? AND source_role = 'origin'
+            """,
+            (new_memory_id, target.id),
+        )
 
     @staticmethod
     async def _is_tombstoned(connection: aiosqlite.Connection, draft: MemoryCandidateDraft) -> bool:

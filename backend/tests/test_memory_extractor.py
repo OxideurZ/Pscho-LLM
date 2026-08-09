@@ -86,6 +86,37 @@ class StructuredBackend(FakeBackend):
         )
 
 
+class LocationBackend(FakeBackend):
+    async def generate_structured(  # type: ignore[no-untyped-def]
+        self, messages, schema, cancel_event=None
+    ):
+        target = json.loads(messages[1].content)["user_messages"][-1]
+        source = target["content"]
+        city = "Lausanne" if "Lausanne" in source else "Sion"
+        return schema.model_validate(
+            {
+                "schema_version": "1.0",
+                "candidates": [
+                    {
+                        "kind": "personal_fact",
+                        "content": f"L'utilisateur habite {city}.",
+                        "epistemic_status": "stated" if "peut-être" not in source else "uncertain",
+                        "source_spans": [
+                            {
+                                "message_id": target["message_id"],
+                                "start_char": 0,
+                                "end_char": len(source),
+                                "quote": source,
+                            }
+                        ],
+                        "time": {"text": None, "start_at": None, "end_at": None, "precision": None},
+                        "entities": [],
+                    }
+                ],
+            }
+        )
+
+
 async def queued_turn(
     path: Path, content: str = "Je préfère les réponses détaillées."
 ) -> tuple[Database, dict[str, str]]:
@@ -424,3 +455,108 @@ async def test_structured_delete_scrubs_memory_but_preserves_user_message_and_to
         ).fetchone()
     assert latest == ("suppressed", "SAME_SOURCE_TOMBSTONE")
     assert active == (0,)
+
+
+@pytest.mark.asyncio
+async def test_explicit_location_change_supersedes_one_unlocked_prior_location(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "app.sqlite"
+    database, first_ids = await queued_turn(path, "J'habite à Sion.")
+    settings = settings_for(path)
+    backend = LocationBackend()
+    await run_extractor(database, backend, settings)
+    conversations = ConversationRepository(database)
+    second_ids = {
+        "user_message_id": new_id("msg"),
+        "assistant_message_id": new_id("msg"),
+        "session_id": new_id("session"),
+        "run_id": new_id("run"),
+        "job_id": new_id("job"),
+    }
+    await conversations.begin_turn(
+        conversation_id=first_ids["conversation_id"],
+        client_turn_id=str(uuid4()),
+        content="J'ai déménagé à Lausanne.",
+        input_type="text",
+        ids=second_ids,
+        run_metadata=metadata(),
+        memory_job={
+            "id": second_ids["job_id"],
+            "priority": 0,
+            "dedupe_key": f"memory_extract:0.1.2:{second_ids['user_message_id']}",
+            "max_attempts": 3,
+        },
+    )
+    async with database.connect() as connection:
+        await connection.execute(
+            "UPDATE model_runs SET status = 'complete' WHERE id = ?", (second_ids["run_id"],)
+        )
+        await connection.execute(
+            "UPDATE messages SET status = 'complete', content = 'Réponse.' WHERE id = ?",
+            (second_ids["assistant_message_id"],),
+        )
+        await connection.commit()
+    await run_extractor(database, backend, settings)
+
+    async with database.connect() as connection:
+        memories = await (
+            await connection.execute(
+                "SELECT content, status, superseded_by_memory_id "
+                "FROM memory_items ORDER BY created_at"
+            )
+        ).fetchall()
+        roles = await (
+            await connection.execute("SELECT source_role FROM memory_sources ORDER BY created_at")
+        ).fetchall()
+    assert memories[0][0:2] == ("L'utilisateur habite Sion.", "superseded")
+    assert memories[0][2] is not None
+    assert memories[1][0:2] == ("L'utilisateur habite Lausanne.", "active")
+    assert roles == [("origin",), ("update",)]
+
+
+@pytest.mark.asyncio
+async def test_uncertain_location_change_stays_separate(tmp_path: Path) -> None:
+    path = tmp_path / "app.sqlite"
+    database, first_ids = await queued_turn(path, "J'habite à Sion.")
+    settings = settings_for(path)
+    backend = LocationBackend()
+    await run_extractor(database, backend, settings)
+    conversations = ConversationRepository(database)
+    second_ids = {
+        "user_message_id": new_id("msg"),
+        "assistant_message_id": new_id("msg"),
+        "session_id": new_id("session"),
+        "run_id": new_id("run"),
+        "job_id": new_id("job"),
+    }
+    await conversations.begin_turn(
+        conversation_id=first_ids["conversation_id"],
+        client_turn_id=str(uuid4()),
+        content="Je vais peut-être vivre à Lausanne.",
+        input_type="text",
+        ids=second_ids,
+        run_metadata=metadata(),
+        memory_job={
+            "id": second_ids["job_id"],
+            "priority": 0,
+            "dedupe_key": f"memory_extract:0.1.2:{second_ids['user_message_id']}",
+            "max_attempts": 3,
+        },
+    )
+    async with database.connect() as connection:
+        await connection.execute(
+            "UPDATE model_runs SET status = 'complete' WHERE id = ?", (second_ids["run_id"],)
+        )
+        await connection.execute(
+            "UPDATE messages SET status = 'complete', content = 'Réponse.' WHERE id = ?",
+            (second_ids["assistant_message_id"],),
+        )
+        await connection.commit()
+    await run_extractor(database, backend, settings)
+
+    async with database.connect() as connection:
+        statuses = await (
+            await connection.execute("SELECT status FROM memory_items ORDER BY created_at")
+        ).fetchall()
+    assert statuses == [("active",), ("active",)]
