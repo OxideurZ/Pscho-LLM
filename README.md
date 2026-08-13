@@ -5,22 +5,26 @@
 Après avoir installé les prérequis documentés plus bas et placé le `llama-server` et le GGUF
 validé à leurs emplacements configurés :
 
-```powershell
+```console
 git clone git@github.com:OxideurZ/Pscho-LLM.git
 cd Pscho-LLM
 .\setup.ps1
-.\start.ps1
+start.cmd
 ```
 
-`start.ps1` vérifie la configuration, l’intégrité du modèle, les ports et une éventuelle instance
+Sous Windows, il suffit ensuite de double-cliquer sur `start.cmd`. Ce lanceur fonctionne même si
+l’exécution directe des scripts PowerShell est désactivée. Pour arrêter complètement l’application
+et libérer la RAM/VRAM, double-cliquer sur `stop.cmd`.
+
+`start.cmd` délègue à `start.ps1`, qui vérifie la configuration, l’intégrité du modèle, les ports et une éventuelle instance
 déjà saine. Il démarre uniquement `llama-server` et FastAPI, attend leurs health checks puis ouvre
 `http://127.0.0.1:8000`. Aucun serveur Vite/Node n’est requis au runtime quotidien : FastAPI sert le
 build frontend.
 
 Fermer l’onglet du navigateur **n’arrête pas** le modèle. Pour libérer la VRAM après utilisation,
-cliquer sur **Arrêter et libérer la VRAM** dans la barre latérale, ou exécuter `.\stop.ps1`. Ces deux
+cliquer sur **Arrêter et libérer la VRAM** dans la barre latérale, ou exécuter `stop.cmd`. Ces deux
 actions arrêtent le moteur local et FastAPI, sans supprimer les conversations SQLite. Il faut ensuite
-relancer `.\start.ps1` pour reprendre. Il n’y a volontairement pas d’arrêt automatique sur inactivité,
+relancer `start.cmd` pour reprendre. Il n’y a volontairement pas d’arrêt automatique sur inactivité,
 afin de ne pas interrompre une longue génération ou dictée.
 
 Psych-local est un environnement local de recherche conversationnelle. La Milestone B ajoute à la

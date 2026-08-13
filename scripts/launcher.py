@@ -124,6 +124,8 @@ class Launcher:
         self.settings = settings
         self.runtime = settings.data_directory / "runtime"
         self.runtime.mkdir(parents=True, exist_ok=True)
+        self.logs = settings.data_directory / "logs"
+        self.logs.mkdir(parents=True, exist_ok=True)
         self.instance_path = self.runtime / "instance.json"
         self.log_path = self.runtime / "launcher.log"
         self.backend_port = settings.psych_local_port
@@ -215,6 +217,7 @@ class Launcher:
     def start(self, open_browser: bool) -> None:
         if self.healthy_instance():
             self.log("instance_state=existing_healthy")
+            print("Psych-local est déjà démarré et opérationnel.")
             if open_browser:
                 webbrowser.open(self.browser_url())
             return
@@ -224,60 +227,66 @@ class Launcher:
             local_url(self.settings.psych_local_host, self.backend_port, "/v1/health")
         ) and reachable(f"{self.settings.llama_server_url}/health"):
             self.log("instance_state=discovered_healthy")
+            print("Psych-local est déjà démarré et opérationnel.")
             if open_browser:
                 webbrowser.open(self.browser_url())
             return
         self.clear_stale()
+        print("Vérification de l’installation et du modèle…")
         self.verify_installation()
         self.assert_ports_available()
         llama: subprocess.Popen[bytes] | None = None
         backend: subprocess.Popen[bytes] | None = None
         try:
-            llama = subprocess.Popen(
-                [
-                    str(self.settings.llama_server_path),
-                    "-m",
-                    str(self.settings.model_path),
-                    "--alias",
-                    self.settings.model_name,
-                    "--host",
-                    self.settings.psych_local_host,
-                    "--port",
-                    str(self.llama_port),
-                    "-c",
-                    str(self.settings.context_size),
-                    "--parallel",
-                    "1",
-                    "--jinja",
-                    "--reasoning",
-                    self.settings.llama_cpp_reasoning,
-                ],
-                cwd=REPOSITORY_ROOT,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            print("Chargement du modèle local… Cette étape peut prendre environ une minute.")
+            with (self.logs / "llama-server.log").open("ab", buffering=0) as llama_log:
+                llama = subprocess.Popen(
+                    [
+                        str(self.settings.llama_server_path),
+                        "-m",
+                        str(self.settings.model_path),
+                        "--alias",
+                        self.settings.model_name,
+                        "--host",
+                        self.settings.psych_local_host,
+                        "--port",
+                        str(self.llama_port),
+                        "-c",
+                        str(self.settings.context_size),
+                        "--parallel",
+                        "1",
+                        "--jinja",
+                        "--reasoning",
+                        self.settings.llama_cpp_reasoning,
+                    ],
+                    cwd=REPOSITORY_ROOT,
+                    stdout=llama_log,
+                    stderr=subprocess.STDOUT,
+                )
             self.log(f"llama_state=started pid={llama.pid}")
             wait_ready(
                 f"{self.settings.llama_server_url}/health",
                 self.settings.launcher_engine_timeout_seconds,
                 "Le moteur local",
             )
-            backend = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "uvicorn",
-                    "backend.app.main:app",
-                    "--host",
-                    self.settings.psych_local_host,
-                    "--port",
-                    str(self.backend_port),
-                    "--no-access-log",
-                ],
-                cwd=REPOSITORY_ROOT,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            print("Démarrage de l’application…")
+            with (self.logs / "backend.log").open("ab", buffering=0) as backend_log:
+                backend = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-m",
+                        "uvicorn",
+                        "backend.app.main:app",
+                        "--host",
+                        self.settings.psych_local_host,
+                        "--port",
+                        str(self.backend_port),
+                        "--no-access-log",
+                    ],
+                    cwd=REPOSITORY_ROOT,
+                    stdout=backend_log,
+                    stderr=subprocess.STDOUT,
+                )
             self.log(f"backend_state=started pid={backend.pid}")
             wait_ready(
                 local_url(self.settings.psych_local_host, self.backend_port, "/v1/health"),
@@ -296,6 +305,7 @@ class Launcher:
             )
             self.instance_path.write_text(json.dumps(asdict(instance), indent=2), encoding="utf-8")
             self.log("instance_state=ready")
+            print("Psych-local est prêt. Ouverture du navigateur…")
             if open_browser:
                 webbrowser.open(self.browser_url())
         except Exception:
@@ -336,6 +346,7 @@ class Launcher:
             )
         self.instance_path.unlink(missing_ok=True)
         self.log("instance_state=stopped")
+        print("Psych-local est arrêté. La RAM et la VRAM ont été libérées.")
 
 
 def main() -> int:
