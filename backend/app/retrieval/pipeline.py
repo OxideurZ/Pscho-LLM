@@ -158,6 +158,15 @@ class RetrievalSelector:
     async def select(
         self, query: RetrievalQuery, candidates: Sequence[RetrievalCandidate]
     ) -> list[RetrievalCandidate]:
+        if not _has_personal_history_intent(query.current_user_text):
+            return []
+        contradicted = [
+            candidate
+            for candidate in candidates
+            if _current_user_contradicts(query.current_user_text, candidate)
+        ]
+        if contradicted:
+            return []
         shortlist = list(candidates[: self.profile.rerank_top_k])
         if not shortlist:
             return []
@@ -189,7 +198,11 @@ class RetrievalSelector:
             reranked = [
                 candidate
                 for candidate in reranked
-                if candidate.reranker_score is not None and candidate.reranker_score >= threshold
+                if candidate.reranker_score is not None
+                and (
+                    candidate.reranker_score >= threshold
+                    or self._safe_multi_detail_override(query, candidate)
+                )
             ]
         if not _has_historical_intent(query.current_user_text):
             reranked = [
@@ -217,6 +230,19 @@ class RetrievalSelector:
             for rank, candidate in enumerate(selected, start=1)
         ]
 
+    def _safe_multi_detail_override(
+        self, query: RetrievalQuery, candidate: RetrievalCandidate
+    ) -> bool:
+        floor = self.profile.agreement_score_floor
+        normalized = " ".join(query.current_user_text.casefold().split())
+        return bool(
+            floor is not None
+            and (" et " in normalized or "ainsi que" in normalized)
+            and candidate.lexical_rank is not None
+            and candidate.dense_rank is not None
+            and (candidate.reranker_score or 0) >= floor
+        )
+
 
 def _has_historical_intent(text: str) -> bool:
     normalized = " ".join(text.casefold().split())
@@ -224,6 +250,40 @@ def _has_historical_intent(text: str) -> bool:
         re.search(
             r"\b(avant|autrefois|ancien(?:ne)?|précédemment|auparavant|à l'époque|"
             r"passé|habit(?:ais|ait|ions|iez|aient)|viv(?:ais|ait|ions|iez|aient))\b",
+            normalized,
+        )
+    )
+
+
+def _current_user_contradicts(text: str, candidate: RetrievalCandidate) -> bool:
+    current = " ".join(text.casefold().split())
+    if not re.search(r"\b(ne .{0,40} plus|plus maintenant|desormais|j'ai change)\b", current):
+        return False
+    historical = " ".join(candidate.document.content.casefold().split())
+    ignored = {
+        "avec",
+        "cette",
+        "dans",
+        "dois",
+        "doit",
+        "est",
+        "pour",
+        "plus",
+        "quel",
+        "quelle",
+        "suis",
+    }
+    current_terms = {term for term in re.findall(r"[^\W_]{4,}", current) if term not in ignored}
+    historical_terms = set(re.findall(r"[^\W_]{4,}", historical))
+    return len(current_terms & historical_terms) >= 2
+
+
+def _has_personal_history_intent(text: str) -> bool:
+    normalized = " ".join(text.casefold().split())
+    return bool(
+        re.search(
+            r"(?:\b(?:je|moi|mon|ma|mes|me|mien|mienne|ai-je|suis-je|"
+            r"avais-je|etais-je|habite|habitais)\b|\bj'|\bm'|\bque sais-tu sur\b)",
             normalized,
         )
     )

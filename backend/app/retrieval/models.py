@@ -149,6 +149,7 @@ class RetrievalProfile(BaseModel):
     max_items: int = Field(ge=1, le=20)
     rrf_constant: int = Field(default=60, ge=1)
     minimum_reranker_score: float | None = Field(default=None, ge=0, le=1)
+    agreement_score_floor: float | None = Field(default=None, ge=0, le=1)
 
 
 class RetrievalOutcome(BaseModel):

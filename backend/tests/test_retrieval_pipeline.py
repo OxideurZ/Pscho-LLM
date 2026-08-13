@@ -299,3 +299,63 @@ async def test_reranker_failure_keeps_only_hybrid_agreement() -> None:
     assert result.degraded is True
     assert result.error_codes == ["RERANKER_UNAVAILABLE"]
     assert [item.document.source_id for item in result.items] == ["agreed"]
+
+
+@pytest.mark.asyncio
+async def test_explicit_current_user_update_excludes_contradicted_history() -> None:
+    old = candidate(
+        source(
+            RetrievalSourceType.MEMORY,
+            "old-preference",
+            "Je prefere des reponses courtes avec des exemples concrets.",
+            status="active",
+        ),
+        1,
+    )
+    retrieval_profile = profile()
+    selector = RetrievalSelector(ScoreReranker({"old-preference": 0.99}), retrieval_profile)
+
+    selected = await selector.select(
+        query("Je ne veux plus de reponses courtes avec des exemples concrets."), [old]
+    )
+
+    assert selected == []
+
+
+@pytest.mark.asyncio
+async def test_non_personal_query_short_circuits_to_no_retrieval() -> None:
+    noise = candidate(
+        source(RetrievalSourceType.MEMORY, "noise", "Le ciel est bleu.", status="active"),
+        1,
+    )
+    reranker = ScoreReranker({"noise": 0.99})
+
+    selected = await RetrievalSelector(reranker, profile()).select(
+        query("Pourquoi le ciel est-il bleu ?"), [noise]
+    )
+
+    assert selected == []
+    assert reranker.candidate_counts == []
+
+
+@pytest.mark.asyncio
+async def test_named_history_lookup_and_bounded_multi_detail_agreement() -> None:
+    alex = candidate(
+        source(RetrievalSourceType.MEMORY, "alex", "Alex Martin est mon collegue", status="active"),
+        1,
+    ).model_copy(update={"lexical_rank": 1, "dense_rank": 1})
+    detail = candidate(
+        source(RetrievalSourceType.RAW_USER, "detail", "Code exact ZX-4912"),
+        2,
+    ).model_copy(update={"lexical_rank": 1, "dense_rank": 2})
+    configured = profile(threshold=0.2).model_copy(update={"agreement_score_floor": 0.01})
+
+    named = await RetrievalSelector(ScoreReranker({"alex": 0.9}), configured).select(
+        query("Que sais-tu sur Alex Martin ?"), [alex]
+    )
+    multi = await RetrievalSelector(ScoreReranker({"detail": 0.02}), configured).select(
+        query("Rappelle mon evenement et mon code exact."), [detail]
+    )
+
+    assert [item.document.source_id for item in named] == ["alex"]
+    assert [item.document.source_id for item in multi] == ["detail"]

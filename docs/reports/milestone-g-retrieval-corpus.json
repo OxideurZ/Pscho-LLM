@@ -1,0 +1,1646 @@
+{
+  "generated_at": "2026-08-13T09:42:11.009126+00:00",
+  "corpus_schema": "1.0",
+  "development_cases": 10,
+  "heldout_cases": 12,
+  "frozen_threshold": 0.205352,
+  "frozen_agreement_score_floor": 0.011829,
+  "metrics": {
+    "development": {
+      "lexical": {
+        "recall_at_k": 0.7142857142857143,
+        "mrr": 0.6428571428571429,
+        "ndcg_at_k": 0.6615613933673511,
+        "precision_at_injected": 0.10204081632653061,
+        "forbidden_injection_count": 0,
+        "no_retrieval_correct": 1,
+        "no_retrieval_total": 3,
+        "hard_failures": [
+          "dev_semantic_preference",
+          "dev_general_question",
+          "dev_disabled_memory"
+        ]
+      },
+      "dense": {
+        "recall_at_k": 1.0,
+        "mrr": 0.9285714285714286,
+        "ndcg_at_k": 0.9472756790816368,
+        "precision_at_injected": 0.05,
+        "forbidden_injection_count": 1,
+        "no_retrieval_correct": 0,
+        "no_retrieval_total": 3,
+        "hard_failures": [
+          "dev_greeting",
+          "dev_general_question",
+          "dev_disabled_memory",
+          "dev_cross_conversation"
+        ]
+      },
+      "rrf": {
+        "recall_at_k": 1.0,
+        "mrr": 0.8775510204081634,
+        "ndcg_at_k": 0.9047619047619048,
+        "precision_at_injected": 0.05,
+        "forbidden_injection_count": 1,
+        "no_retrieval_correct": 0,
+        "no_retrieval_total": 3,
+        "hard_failures": [
+          "dev_greeting",
+          "dev_general_question",
+          "dev_disabled_memory",
+          "dev_cross_conversation"
+        ]
+      },
+      "reranked": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 1.0,
+        "precision_at_injected": 0.21875,
+        "forbidden_injection_count": 0,
+        "no_retrieval_correct": 2,
+        "no_retrieval_total": 3,
+        "hard_failures": [
+          "dev_disabled_memory"
+        ]
+      },
+      "final": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 1.0,
+        "precision_at_injected": 1.0,
+        "forbidden_injection_count": 0,
+        "no_retrieval_correct": 3,
+        "no_retrieval_total": 3,
+        "hard_failures": []
+      }
+    },
+    "heldout": {
+      "lexical": {
+        "recall_at_k": 0.75,
+        "mrr": 0.6875,
+        "ndcg_at_k": 0.7038662191964322,
+        "precision_at_injected": 0.14583333333333334,
+        "forbidden_injection_count": 3,
+        "no_retrieval_correct": 1,
+        "no_retrieval_total": 4,
+        "hard_failures": [
+          "heldout_semantic_belief",
+          "heldout_current_state_update",
+          "heldout_ambiguous_alex",
+          "heldout_recent_duplicate",
+          "heldout_current_contradiction",
+          "heldout_small_talk"
+        ]
+      },
+      "dense": {
+        "recall_at_k": 1.0,
+        "mrr": 0.875,
+        "ndcg_at_k": 0.8923843528101205,
+        "precision_at_injected": 0.05357142857142857,
+        "forbidden_injection_count": 4,
+        "no_retrieval_correct": 0,
+        "no_retrieval_total": 4,
+        "hard_failures": [
+          "heldout_current_state_update",
+          "heldout_ambiguous_alex",
+          "heldout_recent_duplicate",
+          "heldout_current_contradiction",
+          "heldout_deleted_memory",
+          "heldout_small_talk"
+        ]
+      },
+      "rrf": {
+        "recall_at_k": 1.0,
+        "mrr": 0.8095238095238095,
+        "ndcg_at_k": 0.8541666666666666,
+        "precision_at_injected": 0.05357142857142857,
+        "forbidden_injection_count": 4,
+        "no_retrieval_correct": 0,
+        "no_retrieval_total": 4,
+        "hard_failures": [
+          "heldout_current_state_update",
+          "heldout_ambiguous_alex",
+          "heldout_recent_duplicate",
+          "heldout_current_contradiction",
+          "heldout_deleted_memory",
+          "heldout_small_talk"
+        ]
+      },
+      "reranked": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 1.0,
+        "precision_at_injected": 0.225,
+        "forbidden_injection_count": 2,
+        "no_retrieval_correct": 2,
+        "no_retrieval_total": 4,
+        "hard_failures": [
+          "heldout_ambiguous_alex",
+          "heldout_recent_duplicate",
+          "heldout_deleted_memory"
+        ]
+      },
+      "final": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 1.0,
+        "precision_at_injected": 1.0,
+        "forbidden_injection_count": 0,
+        "no_retrieval_correct": 4,
+        "no_retrieval_total": 4,
+        "hard_failures": []
+      }
+    }
+  },
+  "latency_ms": {
+    "fts_ms": {
+      "p50": 15.000000000327418,
+      "p95": 16.000000000531145
+    },
+    "embedding_ms": {
+      "p50": 313.00000000010186,
+      "p95": 342.9999999998472
+    },
+    "vector_ms": {
+      "p50": 15.99999999962165,
+      "p95": 30.99999999994907
+    },
+    "reranker_ms": {
+      "p50": 4187.499999999545,
+      "p95": 4609.000000000378
+    },
+    "total_ms": {
+      "p50": 4530.999999999494,
+      "p95": 4984.000000000378
+    }
+  },
+  "results": [
+    {
+      "id": "dev_exact_rare_name",
+      "split": "development",
+      "reranker_scores": [
+        {
+          "source_id": "memory:rare_orpheon",
+          "score": 0.9999065399169922
+        },
+        {
+          "source_id": "memory:goal_marathon",
+          "score": 0.008951938711106777
+        },
+        {
+          "source_id": "memory:alex_colleague",
+          "score": 0.0017438104841858149
+        },
+        {
+          "source_id": "raw:bicycle_code",
+          "score": 0.0013776132836937904
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:rare_orpheon",
+          "raw:bicycle_code",
+          "memory:goal_marathon",
+          "raw:jazz_duplicate",
+          "memory:alex_colleague",
+          "memory:alex_cousin",
+          "memory:event_jazz",
+          "memory:voice_tea"
+        ],
+        "dense": [
+          "memory:rare_orpheon",
+          "raw:prompt_injection",
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "memory:goal_marathon",
+          "raw:bicycle_code",
+          "memory:alex_cousin",
+          "raw:chatter",
+          "memory:alex_colleague",
+          "memory:old_location",
+          "memory:current_location",
+          "memory:preference_concise",
+          "memory:voice_tea",
+          "memory:belief_math"
+        ],
+        "rrf": [
+          "memory:rare_orpheon",
+          "raw:bicycle_code",
+          "raw:jazz_duplicate",
+          "memory:goal_marathon",
+          "memory:event_jazz",
+          "memory:alex_colleague",
+          "memory:alex_cousin",
+          "memory:voice_tea",
+          "raw:prompt_injection",
+          "raw:chatter",
+          "memory:old_location",
+          "memory:current_location",
+          "memory:preference_concise",
+          "memory:belief_math"
+        ],
+        "reranked": [
+          "memory:rare_orpheon",
+          "memory:goal_marathon",
+          "memory:alex_colleague",
+          "raw:bicycle_code"
+        ],
+        "final": [
+          "memory:rare_orpheon"
+        ]
+      }
+    },
+    {
+      "id": "dev_number_raw_fallback",
+      "split": "development",
+      "reranker_scores": [
+        {
+          "source_id": "raw:bicycle_code",
+          "score": 0.9998315572738647
+        },
+        {
+          "source_id": "memory:rare_orpheon",
+          "score": 0.0008148839115165174
+        },
+        {
+          "source_id": "memory:alex_colleague",
+          "score": 0.0005378826172091067
+        },
+        {
+          "source_id": "memory:alex_cousin",
+          "score": 0.000371338683180511
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:goal_marathon",
+          "raw:bicycle_code",
+          "memory:alex_colleague",
+          "raw:jazz_duplicate",
+          "memory:alex_cousin",
+          "memory:event_jazz",
+          "memory:rare_orpheon",
+          "memory:voice_tea"
+        ],
+        "dense": [
+          "memory:rare_orpheon",
+          "raw:bicycle_code",
+          "memory:goal_marathon",
+          "raw:prompt_injection",
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "raw:chatter",
+          "memory:alex_colleague",
+          "memory:belief_math",
+          "memory:alex_cousin",
+          "memory:old_location",
+          "memory:current_location",
+          "memory:voice_tea"
+        ],
+        "rrf": [
+          "raw:bicycle_code",
+          "memory:goal_marathon",
+          "raw:jazz_duplicate",
+          "memory:rare_orpheon",
+          "memory:alex_colleague",
+          "memory:event_jazz",
+          "memory:alex_cousin",
+          "memory:voice_tea",
+          "raw:prompt_injection",
+          "memory:preference_concise",
+          "raw:chatter",
+          "memory:belief_math",
+          "memory:old_location",
+          "memory:current_location"
+        ],
+        "reranked": [
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:alex_colleague",
+          "memory:alex_cousin"
+        ],
+        "final": [
+          "raw:bicycle_code"
+        ]
+      }
+    },
+    {
+      "id": "dev_semantic_preference",
+      "split": "development",
+      "reranker_scores": [
+        {
+          "source_id": "memory:preference_concise",
+          "score": 0.37437114119529724
+        },
+        {
+          "source_id": "raw:prompt_injection",
+          "score": 0.0229960884898901
+        },
+        {
+          "source_id": "memory:belief_math",
+          "score": 0.01771395653486252
+        },
+        {
+          "source_id": "memory:rare_orpheon",
+          "score": 0.0004591500910464674
+        }
+      ],
+      "stages": {
+        "lexical": [],
+        "dense": [
+          "memory:preference_concise",
+          "raw:prompt_injection",
+          "memory:belief_math",
+          "raw:chatter",
+          "memory:rare_orpheon",
+          "raw:bicycle_code",
+          "memory:old_location",
+          "raw:jazz_duplicate",
+          "memory:goal_marathon",
+          "memory:current_location",
+          "memory:alex_colleague",
+          "memory:alex_cousin",
+          "memory:voice_tea",
+          "memory:event_jazz"
+        ],
+        "rrf": [
+          "memory:preference_concise",
+          "raw:prompt_injection",
+          "memory:belief_math",
+          "raw:chatter",
+          "memory:rare_orpheon",
+          "raw:bicycle_code",
+          "memory:old_location",
+          "raw:jazz_duplicate",
+          "memory:goal_marathon",
+          "memory:current_location",
+          "memory:alex_colleague",
+          "memory:alex_cousin",
+          "memory:voice_tea",
+          "memory:event_jazz"
+        ],
+        "reranked": [
+          "memory:preference_concise",
+          "raw:prompt_injection",
+          "memory:belief_math",
+          "memory:rare_orpheon"
+        ],
+        "final": [
+          "memory:preference_concise"
+        ]
+      }
+    },
+    {
+      "id": "dev_goal",
+      "split": "development",
+      "reranker_scores": [
+        {
+          "source_id": "memory:goal_marathon",
+          "score": 0.9158338904380798
+        },
+        {
+          "source_id": "memory:preference_concise",
+          "score": 0.00043683635885827243
+        },
+        {
+          "source_id": "memory:event_jazz",
+          "score": 0.0002191206585848704
+        },
+        {
+          "source_id": "memory:belief_math",
+          "score": 0.00018083119357470423
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:belief_math",
+          "raw:chatter",
+          "memory:voice_tea",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "memory:event_jazz"
+        ],
+        "dense": [
+          "memory:goal_marathon",
+          "raw:prompt_injection",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:preference_concise",
+          "raw:jazz_duplicate",
+          "memory:belief_math",
+          "raw:bicycle_code",
+          "memory:old_location",
+          "memory:event_jazz",
+          "memory:current_location",
+          "memory:alex_cousin",
+          "memory:voice_tea",
+          "memory:alex_colleague"
+        ],
+        "rrf": [
+          "raw:chatter",
+          "memory:belief_math",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "memory:event_jazz",
+          "memory:voice_tea",
+          "memory:goal_marathon",
+          "raw:prompt_injection",
+          "memory:rare_orpheon",
+          "raw:bicycle_code",
+          "memory:old_location",
+          "memory:current_location",
+          "memory:alex_cousin",
+          "memory:alex_colleague"
+        ],
+        "reranked": [
+          "memory:goal_marathon",
+          "memory:preference_concise",
+          "memory:event_jazz",
+          "memory:belief_math"
+        ],
+        "final": [
+          "memory:goal_marathon"
+        ]
+      }
+    },
+    {
+      "id": "dev_greeting",
+      "split": "development",
+      "reranker_scores": [],
+      "stages": {
+        "lexical": [],
+        "dense": [
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "raw:chatter",
+          "memory:event_jazz",
+          "raw:bicycle_code",
+          "memory:alex_cousin",
+          "memory:rare_orpheon",
+          "memory:belief_math",
+          "memory:alex_colleague",
+          "memory:voice_tea",
+          "memory:goal_marathon"
+        ],
+        "rrf": [
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "raw:chatter",
+          "memory:event_jazz",
+          "raw:bicycle_code",
+          "memory:alex_cousin",
+          "memory:rare_orpheon",
+          "memory:belief_math",
+          "memory:alex_colleague",
+          "memory:voice_tea",
+          "memory:goal_marathon"
+        ],
+        "reranked": [],
+        "final": []
+      }
+    },
+    {
+      "id": "dev_general_question",
+      "split": "development",
+      "reranker_scores": [],
+      "stages": {
+        "lexical": [
+          "memory:voice_tea",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "raw:jazz_duplicate",
+          "memory:event_jazz",
+          "memory:goal_marathon"
+        ],
+        "dense": [
+          "memory:preference_concise",
+          "raw:chatter",
+          "memory:alex_cousin",
+          "raw:prompt_injection",
+          "memory:old_location",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "raw:jazz_duplicate",
+          "memory:belief_math",
+          "memory:alex_colleague",
+          "memory:voice_tea",
+          "memory:current_location",
+          "memory:event_jazz",
+          "memory:goal_marathon"
+        ],
+        "rrf": [
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "raw:jazz_duplicate",
+          "memory:voice_tea",
+          "memory:event_jazz",
+          "memory:goal_marathon",
+          "memory:preference_concise",
+          "raw:chatter",
+          "memory:alex_cousin",
+          "raw:prompt_injection",
+          "memory:old_location",
+          "memory:belief_math",
+          "memory:alex_colleague",
+          "memory:current_location"
+        ],
+        "reranked": [],
+        "final": []
+      }
+    },
+    {
+      "id": "dev_disabled_memory",
+      "split": "development",
+      "reranker_scores": [
+        {
+          "source_id": "memory:voice_tea",
+          "score": 0.01182775478810072
+        },
+        {
+          "source_id": "raw:chatter",
+          "score": 0.0003903278266079724
+        },
+        {
+          "source_id": "raw:prompt_injection",
+          "score": 0.0003417749539949
+        },
+        {
+          "source_id": "memory:event_jazz",
+          "score": 0.0002481092233210802
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "memory:belief_math",
+          "raw:chatter",
+          "memory:voice_tea",
+          "memory:preference_concise"
+        ],
+        "dense": [
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:current_location",
+          "raw:chatter",
+          "memory:voice_tea",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "memory:belief_math",
+          "memory:alex_cousin",
+          "memory:alex_colleague",
+          "memory:goal_marathon",
+          "memory:event_jazz"
+        ],
+        "rrf": [
+          "raw:chatter",
+          "raw:jazz_duplicate",
+          "memory:voice_tea",
+          "memory:belief_math",
+          "memory:preference_concise",
+          "memory:event_jazz",
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:current_location",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:alex_cousin",
+          "memory:alex_colleague",
+          "memory:goal_marathon"
+        ],
+        "reranked": [
+          "memory:voice_tea",
+          "raw:chatter",
+          "raw:prompt_injection",
+          "memory:event_jazz"
+        ],
+        "final": []
+      }
+    },
+    {
+      "id": "dev_same_information_memory_raw",
+      "split": "development",
+      "reranker_scores": [
+        {
+          "source_id": "memory:event_jazz",
+          "score": 0.9983269572257996
+        },
+        {
+          "source_id": "raw:chatter",
+          "score": 0.0001857570168795064
+        },
+        {
+          "source_id": "memory:current_location",
+          "score": 2.2050408006180078e-05
+        },
+        {
+          "source_id": "memory:goal_marathon",
+          "score": 7.5624634519044776e-06
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "memory:goal_marathon",
+          "raw:bicycle_code",
+          "memory:alex_colleague"
+        ],
+        "dense": [
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "memory:current_location",
+          "raw:chatter",
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:belief_math",
+          "memory:goal_marathon",
+          "memory:alex_colleague",
+          "memory:preference_concise",
+          "memory:voice_tea"
+        ],
+        "rrf": [
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "raw:bicycle_code",
+          "memory:goal_marathon",
+          "memory:alex_colleague",
+          "memory:current_location",
+          "raw:chatter",
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "memory:rare_orpheon",
+          "memory:belief_math",
+          "memory:preference_concise",
+          "memory:voice_tea"
+        ],
+        "reranked": [
+          "memory:event_jazz",
+          "raw:chatter",
+          "memory:current_location",
+          "memory:goal_marathon"
+        ],
+        "final": [
+          "memory:event_jazz"
+        ]
+      }
+    },
+    {
+      "id": "dev_cross_conversation",
+      "split": "development",
+      "reranker_scores": [
+        {
+          "source_id": "memory:current_location",
+          "score": 0.9968806505203247
+        },
+        {
+          "source_id": "memory:alex_cousin",
+          "score": 0.036332618445158005
+        },
+        {
+          "source_id": "memory:event_jazz",
+          "score": 0.007472801487892866
+        },
+        {
+          "source_id": "raw:prompt_injection",
+          "score": 0.00015390210319310427
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:current_location"
+        ],
+        "dense": [
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "raw:chatter",
+          "memory:event_jazz",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:alex_colleague",
+          "memory:preference_concise",
+          "memory:belief_math",
+          "memory:goal_marathon",
+          "memory:voice_tea"
+        ],
+        "rrf": [
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "raw:chatter",
+          "memory:event_jazz",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:alex_colleague",
+          "memory:preference_concise",
+          "memory:belief_math",
+          "memory:goal_marathon",
+          "memory:voice_tea"
+        ],
+        "reranked": [
+          "memory:current_location",
+          "memory:alex_cousin",
+          "memory:event_jazz",
+          "raw:prompt_injection"
+        ],
+        "final": [
+          "memory:current_location"
+        ]
+      }
+    },
+    {
+      "id": "dev_voice_origin",
+      "split": "development",
+      "reranker_scores": [
+        {
+          "source_id": "memory:voice_tea",
+          "score": 0.9983471632003784
+        },
+        {
+          "source_id": "raw:chatter",
+          "score": 0.02002709172666073
+        },
+        {
+          "source_id": "memory:preference_concise",
+          "score": 0.013745719566941261
+        },
+        {
+          "source_id": "memory:belief_math",
+          "score": 0.0005861154641024768
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:voice_tea",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "raw:bicycle_code",
+          "memory:event_jazz",
+          "raw:chatter",
+          "memory:belief_math",
+          "memory:rare_orpheon",
+          "memory:goal_marathon"
+        ],
+        "dense": [
+          "memory:voice_tea",
+          "raw:chatter",
+          "memory:preference_concise",
+          "raw:prompt_injection",
+          "memory:old_location",
+          "raw:jazz_duplicate",
+          "memory:belief_math",
+          "raw:bicycle_code",
+          "memory:current_location",
+          "memory:goal_marathon",
+          "memory:rare_orpheon",
+          "memory:alex_colleague",
+          "memory:alex_cousin",
+          "memory:event_jazz"
+        ],
+        "rrf": [
+          "memory:voice_tea",
+          "raw:chatter",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "raw:bicycle_code",
+          "memory:belief_math",
+          "memory:rare_orpheon",
+          "memory:goal_marathon",
+          "memory:event_jazz",
+          "raw:prompt_injection",
+          "memory:old_location",
+          "memory:current_location",
+          "memory:alex_colleague",
+          "memory:alex_cousin"
+        ],
+        "reranked": [
+          "memory:voice_tea",
+          "raw:chatter",
+          "memory:preference_concise",
+          "memory:belief_math"
+        ],
+        "final": [
+          "memory:voice_tea"
+        ]
+      }
+    },
+    {
+      "id": "heldout_semantic_belief",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "memory:belief_math",
+          "score": 0.2856147289276123
+        },
+        {
+          "source_id": "memory:preference_concise",
+          "score": 0.01259502861648798
+        },
+        {
+          "source_id": "raw:prompt_injection",
+          "score": 0.00015245734539348632
+        },
+        {
+          "source_id": "raw:bicycle_code",
+          "score": 7.963764801388606e-05
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:preference_concise",
+          "raw:prompt_injection"
+        ],
+        "dense": [
+          "memory:belief_math",
+          "raw:prompt_injection",
+          "memory:preference_concise",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:old_location",
+          "raw:jazz_duplicate",
+          "memory:alex_cousin",
+          "memory:current_location",
+          "memory:alex_colleague",
+          "memory:voice_tea",
+          "memory:event_jazz",
+          "memory:goal_marathon"
+        ],
+        "rrf": [
+          "raw:prompt_injection",
+          "memory:preference_concise",
+          "memory:belief_math",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:old_location",
+          "raw:jazz_duplicate",
+          "memory:alex_cousin",
+          "memory:current_location",
+          "memory:alex_colleague",
+          "memory:voice_tea",
+          "memory:event_jazz",
+          "memory:goal_marathon"
+        ],
+        "reranked": [
+          "memory:belief_math",
+          "memory:preference_concise",
+          "raw:prompt_injection",
+          "raw:bicycle_code"
+        ],
+        "final": [
+          "memory:belief_math"
+        ]
+      }
+    },
+    {
+      "id": "heldout_old_event",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "memory:event_jazz",
+          "score": 0.9199475646018982
+        },
+        {
+          "source_id": "raw:chatter",
+          "score": 0.0026455181650817394
+        },
+        {
+          "source_id": "memory:current_location",
+          "score": 0.000801250571385026
+        },
+        {
+          "source_id": "memory:rare_orpheon",
+          "score": 8.078560495050624e-05
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:event_jazz",
+          "raw:jazz_duplicate"
+        ],
+        "dense": [
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "memory:current_location",
+          "raw:chatter",
+          "memory:rare_orpheon",
+          "raw:prompt_injection",
+          "memory:old_location",
+          "raw:bicycle_code",
+          "memory:preference_concise",
+          "memory:belief_math",
+          "memory:goal_marathon",
+          "memory:alex_cousin",
+          "memory:voice_tea",
+          "memory:alex_colleague"
+        ],
+        "rrf": [
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "memory:current_location",
+          "raw:chatter",
+          "memory:rare_orpheon",
+          "raw:prompt_injection",
+          "memory:old_location",
+          "raw:bicycle_code",
+          "memory:preference_concise",
+          "memory:belief_math",
+          "memory:goal_marathon",
+          "memory:alex_cousin",
+          "memory:voice_tea",
+          "memory:alex_colleague"
+        ],
+        "reranked": [
+          "memory:event_jazz",
+          "raw:chatter",
+          "memory:current_location",
+          "memory:rare_orpheon"
+        ],
+        "final": [
+          "memory:event_jazz"
+        ]
+      }
+    },
+    {
+      "id": "heldout_current_state_update",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "memory:current_location",
+          "score": 0.8852643370628357
+        },
+        {
+          "source_id": "memory:event_jazz",
+          "score": 0.05949755758047104
+        },
+        {
+          "source_id": "raw:chatter",
+          "score": 0.007945544086396694
+        },
+        {
+          "source_id": "memory:voice_tea",
+          "score": 0.0033470846246927977
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:belief_math",
+          "raw:chatter",
+          "memory:voice_tea",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "memory:event_jazz"
+        ],
+        "dense": [
+          "memory:current_location",
+          "raw:chatter",
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "raw:jazz_duplicate",
+          "memory:event_jazz",
+          "raw:bicycle_code",
+          "memory:preference_concise",
+          "memory:rare_orpheon",
+          "memory:belief_math",
+          "memory:alex_colleague",
+          "memory:goal_marathon",
+          "memory:voice_tea"
+        ],
+        "rrf": [
+          "raw:chatter",
+          "raw:jazz_duplicate",
+          "memory:belief_math",
+          "memory:preference_concise",
+          "memory:event_jazz",
+          "memory:voice_tea",
+          "memory:current_location",
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:alex_colleague",
+          "memory:goal_marathon"
+        ],
+        "reranked": [
+          "memory:current_location",
+          "memory:event_jazz",
+          "raw:chatter",
+          "memory:voice_tea"
+        ],
+        "final": [
+          "memory:current_location"
+        ]
+      }
+    },
+    {
+      "id": "heldout_historical_state",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "memory:old_location",
+          "score": 0.9987260699272156
+        },
+        {
+          "source_id": "memory:current_location",
+          "score": 0.1928955763578415
+        },
+        {
+          "source_id": "memory:alex_cousin",
+          "score": 0.046996381133794785
+        },
+        {
+          "source_id": "raw:jazz_duplicate",
+          "score": 0.0035782407503575087
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:old_location"
+        ],
+        "dense": [
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:current_location",
+          "raw:bicycle_code",
+          "memory:alex_cousin",
+          "raw:jazz_duplicate",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:preference_concise",
+          "memory:alex_colleague",
+          "memory:belief_math",
+          "memory:voice_tea",
+          "memory:event_jazz",
+          "memory:goal_marathon"
+        ],
+        "rrf": [
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:current_location",
+          "raw:bicycle_code",
+          "memory:alex_cousin",
+          "raw:jazz_duplicate",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:preference_concise",
+          "memory:alex_colleague",
+          "memory:belief_math",
+          "memory:voice_tea",
+          "memory:event_jazz",
+          "memory:goal_marathon"
+        ],
+        "reranked": [
+          "memory:old_location",
+          "memory:current_location",
+          "memory:alex_cousin",
+          "raw:jazz_duplicate"
+        ],
+        "final": [
+          "memory:old_location"
+        ]
+      }
+    },
+    {
+      "id": "heldout_raw_fallback_semantic",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "raw:bicycle_code",
+          "score": 0.704500138759613
+        },
+        {
+          "source_id": "memory:alex_colleague",
+          "score": 0.0001175034703919664
+        },
+        {
+          "source_id": "memory:belief_math",
+          "score": 0.00010378509614383802
+        },
+        {
+          "source_id": "memory:alex_cousin",
+          "score": 9.917921124724671e-05
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:belief_math",
+          "raw:bicycle_code",
+          "memory:goal_marathon",
+          "raw:jazz_duplicate",
+          "memory:event_jazz",
+          "memory:alex_colleague",
+          "memory:alex_cousin",
+          "memory:rare_orpheon"
+        ],
+        "dense": [
+          "memory:goal_marathon",
+          "raw:bicycle_code",
+          "memory:preference_concise",
+          "raw:prompt_injection",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "memory:old_location",
+          "memory:alex_cousin",
+          "memory:voice_tea",
+          "memory:belief_math",
+          "memory:alex_colleague",
+          "memory:event_jazz"
+        ],
+        "rrf": [
+          "raw:bicycle_code",
+          "memory:goal_marathon",
+          "raw:jazz_duplicate",
+          "memory:belief_math",
+          "memory:rare_orpheon",
+          "memory:alex_cousin",
+          "memory:event_jazz",
+          "memory:alex_colleague",
+          "memory:preference_concise",
+          "raw:prompt_injection",
+          "raw:chatter",
+          "memory:current_location",
+          "memory:old_location",
+          "memory:voice_tea"
+        ],
+        "reranked": [
+          "raw:bicycle_code",
+          "memory:alex_colleague",
+          "memory:belief_math",
+          "memory:alex_cousin"
+        ],
+        "final": [
+          "raw:bicycle_code"
+        ]
+      }
+    },
+    {
+      "id": "heldout_ambiguous_alex",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "memory:alex_colleague",
+          "score": 0.9792668223381042
+        },
+        {
+          "source_id": "memory:goal_marathon",
+          "score": 0.005040775053203106
+        },
+        {
+          "source_id": "memory:alex_cousin",
+          "score": 0.0035546566359698772
+        },
+        {
+          "source_id": "raw:bicycle_code",
+          "score": 0.0005512571078725159
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:alex_colleague",
+          "memory:alex_cousin"
+        ],
+        "dense": [
+          "memory:alex_colleague",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "raw:bicycle_code",
+          "memory:goal_marathon",
+          "raw:jazz_duplicate",
+          "memory:old_location",
+          "raw:chatter",
+          "memory:rare_orpheon",
+          "memory:current_location",
+          "memory:belief_math",
+          "memory:event_jazz",
+          "memory:preference_concise",
+          "memory:voice_tea"
+        ],
+        "rrf": [
+          "memory:alex_colleague",
+          "memory:alex_cousin",
+          "raw:prompt_injection",
+          "raw:bicycle_code",
+          "memory:goal_marathon",
+          "raw:jazz_duplicate",
+          "memory:old_location",
+          "raw:chatter",
+          "memory:rare_orpheon",
+          "memory:current_location",
+          "memory:belief_math",
+          "memory:event_jazz",
+          "memory:preference_concise",
+          "memory:voice_tea"
+        ],
+        "reranked": [
+          "memory:alex_colleague",
+          "memory:goal_marathon",
+          "memory:alex_cousin",
+          "raw:bicycle_code"
+        ],
+        "final": [
+          "memory:alex_colleague"
+        ]
+      }
+    },
+    {
+      "id": "heldout_recent_duplicate",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "memory:current_location",
+          "score": 0.19912680983543396
+        },
+        {
+          "source_id": "raw:prompt_injection",
+          "score": 0.0006600393098779023
+        },
+        {
+          "source_id": "memory:goal_marathon",
+          "score": 0.00040455179987475276
+        },
+        {
+          "source_id": "memory:event_jazz",
+          "score": 0.00018474558601155877
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:current_location",
+          "raw:bicycle_code",
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "memory:goal_marathon"
+        ],
+        "dense": [
+          "memory:current_location",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "raw:jazz_duplicate",
+          "memory:old_location",
+          "raw:chatter",
+          "memory:event_jazz",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:preference_concise",
+          "memory:alex_colleague",
+          "memory:goal_marathon",
+          "memory:voice_tea",
+          "memory:belief_math"
+        ],
+        "rrf": [
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "raw:bicycle_code",
+          "memory:event_jazz",
+          "memory:goal_marathon",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "memory:old_location",
+          "raw:chatter",
+          "memory:rare_orpheon",
+          "memory:preference_concise",
+          "memory:alex_colleague",
+          "memory:voice_tea",
+          "memory:belief_math"
+        ],
+        "reranked": [
+          "memory:current_location",
+          "raw:prompt_injection",
+          "memory:goal_marathon",
+          "memory:event_jazz"
+        ],
+        "final": []
+      }
+    },
+    {
+      "id": "heldout_current_contradiction",
+      "split": "heldout",
+      "reranker_scores": [],
+      "stages": {
+        "lexical": [
+          "memory:preference_concise",
+          "raw:jazz_duplicate",
+          "memory:belief_math",
+          "raw:bicycle_code",
+          "memory:current_location",
+          "raw:chatter",
+          "memory:event_jazz",
+          "memory:goal_marathon",
+          "memory:voice_tea"
+        ],
+        "dense": [
+          "memory:preference_concise",
+          "raw:prompt_injection",
+          "memory:goal_marathon",
+          "raw:chatter",
+          "memory:current_location",
+          "raw:bicycle_code",
+          "memory:belief_math",
+          "raw:jazz_duplicate",
+          "memory:old_location",
+          "memory:rare_orpheon",
+          "memory:alex_cousin",
+          "memory:voice_tea",
+          "memory:alex_colleague",
+          "memory:event_jazz"
+        ],
+        "rrf": [
+          "memory:preference_concise",
+          "raw:jazz_duplicate",
+          "raw:bicycle_code",
+          "raw:chatter",
+          "memory:belief_math",
+          "memory:current_location",
+          "memory:goal_marathon",
+          "memory:event_jazz",
+          "memory:voice_tea",
+          "raw:prompt_injection",
+          "memory:old_location",
+          "memory:rare_orpheon",
+          "memory:alex_cousin",
+          "memory:alex_colleague"
+        ],
+        "reranked": [],
+        "final": []
+      }
+    },
+    {
+      "id": "heldout_historical_injection",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "raw:prompt_injection",
+          "score": 0.2731616497039795
+        },
+        {
+          "source_id": "raw:bicycle_code",
+          "score": 0.0014618356944993138
+        },
+        {
+          "source_id": "memory:rare_orpheon",
+          "score": 0.0005345897516235709
+        },
+        {
+          "source_id": "memory:preference_concise",
+          "score": 0.00031826819758862257
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "raw:prompt_injection"
+        ],
+        "dense": [
+          "memory:preference_concise",
+          "raw:prompt_injection",
+          "memory:old_location",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "memory:alex_cousin",
+          "memory:belief_math",
+          "memory:goal_marathon",
+          "memory:voice_tea",
+          "memory:alex_colleague",
+          "memory:event_jazz"
+        ],
+        "rrf": [
+          "raw:prompt_injection",
+          "memory:preference_concise",
+          "memory:old_location",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "memory:alex_cousin",
+          "memory:belief_math",
+          "memory:goal_marathon",
+          "memory:voice_tea",
+          "memory:alex_colleague",
+          "memory:event_jazz"
+        ],
+        "reranked": [
+          "raw:prompt_injection",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:preference_concise"
+        ],
+        "final": [
+          "raw:prompt_injection"
+        ]
+      }
+    },
+    {
+      "id": "heldout_deleted_memory",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "raw:bicycle_code",
+          "score": 0.01058291457593441
+        },
+        {
+          "source_id": "memory:rare_orpheon",
+          "score": 0.005043965298682451
+        },
+        {
+          "source_id": "memory:current_location",
+          "score": 0.0033673883881419897
+        },
+        {
+          "source_id": "raw:jazz_duplicate",
+          "score": 0.001992024015635252
+        }
+      ],
+      "stages": {
+        "lexical": [],
+        "dense": [
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "raw:bicycle_code",
+          "memory:belief_math",
+          "memory:alex_cousin",
+          "memory:event_jazz",
+          "memory:alex_colleague",
+          "memory:voice_tea",
+          "memory:goal_marathon"
+        ],
+        "rrf": [
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:rare_orpheon",
+          "raw:chatter",
+          "memory:current_location",
+          "raw:jazz_duplicate",
+          "memory:preference_concise",
+          "raw:bicycle_code",
+          "memory:belief_math",
+          "memory:alex_cousin",
+          "memory:event_jazz",
+          "memory:alex_colleague",
+          "memory:voice_tea",
+          "memory:goal_marathon"
+        ],
+        "reranked": [
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:current_location",
+          "raw:jazz_duplicate"
+        ],
+        "final": []
+      }
+    },
+    {
+      "id": "heldout_small_talk",
+      "split": "heldout",
+      "reranker_scores": [],
+      "stages": {
+        "lexical": [
+          "memory:current_location",
+          "memory:old_location",
+          "memory:alex_cousin"
+        ],
+        "dense": [
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:alex_cousin",
+          "raw:chatter",
+          "memory:preference_concise",
+          "raw:jazz_duplicate",
+          "memory:current_location",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:alex_colleague",
+          "memory:belief_math",
+          "memory:event_jazz",
+          "memory:voice_tea",
+          "memory:goal_marathon"
+        ],
+        "rrf": [
+          "memory:old_location",
+          "memory:current_location",
+          "memory:alex_cousin",
+          "raw:prompt_injection",
+          "raw:chatter",
+          "memory:preference_concise",
+          "raw:jazz_duplicate",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "memory:alex_colleague",
+          "memory:belief_math",
+          "memory:event_jazz",
+          "memory:voice_tea",
+          "memory:goal_marathon"
+        ],
+        "reranked": [],
+        "final": []
+      }
+    },
+    {
+      "id": "heldout_raw_complement",
+      "split": "heldout",
+      "reranker_scores": [
+        {
+          "source_id": "raw:bicycle_code",
+          "score": 0.06630939245223999
+        },
+        {
+          "source_id": "memory:event_jazz",
+          "score": 0.020177824422717094
+        },
+        {
+          "source_id": "raw:prompt_injection",
+          "score": 0.00013798760483041406
+        },
+        {
+          "source_id": "memory:alex_cousin",
+          "score": 2.457544360368047e-05
+        }
+      ],
+      "stages": {
+        "lexical": [
+          "memory:event_jazz",
+          "raw:bicycle_code",
+          "memory:goal_marathon",
+          "raw:prompt_injection",
+          "memory:rare_orpheon",
+          "raw:jazz_duplicate",
+          "memory:alex_colleague",
+          "memory:alex_cousin",
+          "memory:voice_tea"
+        ],
+        "dense": [
+          "memory:event_jazz",
+          "raw:jazz_duplicate",
+          "memory:goal_marathon",
+          "raw:bicycle_code",
+          "memory:rare_orpheon",
+          "raw:prompt_injection",
+          "memory:old_location",
+          "raw:chatter",
+          "memory:alex_cousin",
+          "memory:current_location",
+          "memory:preference_concise",
+          "memory:voice_tea",
+          "memory:alex_colleague",
+          "memory:belief_math"
+        ],
+        "rrf": [
+          "memory:event_jazz",
+          "raw:bicycle_code",
+          "raw:jazz_duplicate",
+          "memory:goal_marathon",
+          "raw:prompt_injection",
+          "memory:rare_orpheon",
+          "memory:alex_cousin",
+          "memory:alex_colleague",
+          "memory:voice_tea",
+          "memory:old_location",
+          "raw:chatter",
+          "memory:current_location",
+          "memory:preference_concise",
+          "memory:belief_math"
+        ],
+        "reranked": [
+          "raw:bicycle_code",
+          "memory:event_jazz",
+          "raw:prompt_injection",
+          "memory:alex_cousin"
+        ],
+        "final": [
+          "raw:bicycle_code",
+          "memory:event_jazz"
+        ]
+      }
+    }
+  ]
+}

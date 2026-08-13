@@ -56,6 +56,16 @@ class CipherConnection:
             raise aiosqlite.Error(str(error)) from error
         return CipherCursor(cursor)
 
+    async def executemany(self, sql: str, parameters: Iterable[Iterable[Any]]) -> CipherCursor:
+        rows = [tuple(row) for row in parameters]
+        try:
+            cursor = await asyncio.to_thread(self._connection.executemany, sql, rows)
+        except sqlcipher.IntegrityError as error:
+            raise aiosqlite.IntegrityError(str(error)) from error
+        except sqlcipher.Error as error:
+            raise aiosqlite.Error(str(error)) from error
+        return CipherCursor(cursor)
+
     async def executescript(self, script: str) -> None:
         try:
             await asyncio.to_thread(self._connection.executescript, script)

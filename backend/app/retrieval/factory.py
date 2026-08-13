@@ -67,6 +67,7 @@ class RetrievalRuntime:
             rerank_top_k=settings.retrieval_rerank_top_k,
             max_items=settings.retrieval_max_items,
             minimum_reranker_score=settings.retrieval_minimum_reranker_score,
+            agreement_score_floor=settings.retrieval_agreement_score_floor,
         )
         dense = DenseRetriever(
             self.embedder,
