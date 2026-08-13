@@ -1,8 +1,11 @@
 # Milestone G — rapport de sortie
 
-Date : 2026-08-13  
-Branche : `milestone-g`  
-Commit applicatif évalué : `9e02ad805c0173339afe85cd5e6c61227bafaa7f`  
+Date : 2026-08-13
+
+Branche : `milestone-g`
+
+Commit applicatif évalué : `9e02ad805c0173339afe85cd5e6c61227bafaa7f`
+
 Décision : **GO**
 
 ## Configuration gelée
