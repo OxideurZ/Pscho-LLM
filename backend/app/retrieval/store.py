@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import struct
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -117,6 +118,7 @@ class SqlCipherVectorStore(VectorStore):
                       AND configuration_sha256 = ?
                       AND dimensions = ?
                       AND dtype = ?
+                      AND (? IS NULL OR source_type = ?)
                     """,
                     (
                         query.embedding_model,
@@ -125,6 +127,8 @@ class SqlCipherVectorStore(VectorStore):
                         query.configuration_sha256,
                         query.dimensions,
                         query.dtype,
+                        query.source_type.value if query.source_type else None,
+                        query.source_type.value if query.source_type else None,
                     ),
                 )
             ).fetchall()
@@ -241,6 +245,36 @@ class SqlCipherLexicalIndex:
                 (source_type, source_id),
             )
             await connection.commit()
+
+    async def query(
+        self, text: str, source_type: RetrievalSourceType, *, top_k: int
+    ) -> list[ScoredSource]:
+        tokens = re.findall(r"[^\W_]+(?:[-'][^\W_]+)*", text.casefold(), flags=re.UNICODE)
+        if not tokens:
+            return []
+        expression = " OR ".join(f'"{token.replace(chr(34), chr(34) * 2)}"' for token in tokens)
+        async with self.database.connect() as connection:
+            rows = await (
+                await connection.execute(
+                    """
+                    SELECT source_id, bm25(retrieval_fts) AS score
+                    FROM retrieval_fts
+                    WHERE retrieval_fts MATCH ? AND source_type = ?
+                    ORDER BY score ASC, source_id ASC
+                    LIMIT ?
+                    """,
+                    (expression, source_type.value, top_k),
+                )
+            ).fetchall()
+        return [
+            ScoredSource(
+                source_type=source_type,
+                source_id=str(row[0]),
+                score=-float(row[1]),
+                rank=rank,
+            )
+            for rank, row in enumerate(rows, start=1)
+        ]
 
     async def rebuild(self, documents: Sequence[RetrievalDocument]) -> None:
         async with self.database.connect() as connection:

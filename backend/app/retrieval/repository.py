@@ -42,7 +42,12 @@ class RetrievalSourceRepository:
     def _eligible_query(source_type: RetrievalSourceType, suffix: str = "") -> str:
         if source_type is RetrievalSourceType.MEMORY:
             return f"""
-                SELECT source.id, source.content, source.updated_at
+                SELECT source.id, source.content, source.updated_at,
+                       source.status, source.kind, source.epistemic_status,
+                       source.observed_at, source.event_start_at, source.event_end_at,
+                       source.valid_from, source.valid_until, source.time_precision,
+                       source.time_text, NULL AS conversation_id,
+                       NULL AS conversation_title, source.created_at, NULL AS input_type
                 FROM memory_items AS source
                 WHERE source.status IN ('active', 'superseded')
                   AND source.content IS NOT NULL
@@ -50,7 +55,12 @@ class RetrievalSourceRepository:
                 ORDER BY source.id
             """
         return f"""
-            SELECT source.id, source.content, source.updated_at
+            SELECT source.id, source.content, source.updated_at,
+                   NULL AS status, NULL AS kind, NULL AS epistemic_status,
+                   NULL AS observed_at, NULL AS event_start_at, NULL AS event_end_at,
+                   NULL AS valid_from, NULL AS valid_until, NULL AS time_precision,
+                   NULL AS time_text, source.conversation_id,
+                   conversation.title AS conversation_title, source.created_at, source.input_type
             FROM messages AS source
             JOIN conversations AS conversation ON conversation.id = source.conversation_id
             WHERE source.role = 'user'
@@ -70,4 +80,18 @@ class RetrievalSourceRepository:
             content=content,
             content_sha256=sha256(content.encode("utf-8")).hexdigest(),
             updated_at=str(row["updated_at"]),
+            status=row["status"],
+            kind=row["kind"],
+            epistemic_status=row["epistemic_status"],
+            observed_at=row["observed_at"],
+            event_start_at=row["event_start_at"],
+            event_end_at=row["event_end_at"],
+            valid_from=row["valid_from"],
+            valid_until=row["valid_until"],
+            time_precision=row["time_precision"],
+            time_text=row["time_text"],
+            conversation_id=row["conversation_id"],
+            conversation_title=row["conversation_title"],
+            created_at=row["created_at"],
+            input_type=row["input_type"],
         )
