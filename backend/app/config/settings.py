@@ -62,7 +62,17 @@ class Settings(BaseSettings):
     retrieval_embedding_dimensions: int = Field(default=1024, ge=32, le=1024)
     retrieval_embedding_dtype: str = "float32"
     retrieval_rerank_top_k: int = Field(default=8, ge=1, le=32)
+    retrieval_lexical_top_k: int = Field(default=12, ge=1, le=100)
+    retrieval_dense_top_k: int = Field(default=12, ge=1, le=100)
+    retrieval_rrf_top_k: int = Field(default=16, ge=1, le=100)
+    retrieval_max_items: int = Field(default=4, ge=1, le=20)
+    retrieval_minimum_reranker_score: float | None = Field(default=None, ge=0, le=1)
+    retrieval_context_budget_tokens: int = Field(default=4096, ge=256)
     retrieval_interactive_timeout_ms: int = Field(default=6000, ge=100, le=30_000)
+    retrieval_query_prompt_id: str = "retrieval_query_instruction"
+    retrieval_query_prompt_version: str = "0.1.0"
+    retrieval_rerank_prompt_id: str = "retrieval_rerank_instruction"
+    retrieval_rerank_prompt_version: str = "0.1.0"
     summary_prompt_id: str = "rolling_summary"
     summary_prompt_version: str = "0.1.1"
     memory_extraction_prompt_id: str = "memory_extraction"

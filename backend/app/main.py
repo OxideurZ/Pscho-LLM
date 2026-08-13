@@ -20,6 +20,7 @@ from backend.app.jobs import BackgroundJobCoordinator, JobKind, JobRepository
 from backend.app.llm.base import LLMBackend
 from backend.app.llm.llama_cpp import LlamaCppBackend
 from backend.app.memory import MemoryExtractor, MemoryRepository
+from backend.app.retrieval import RetrievalRuntime
 from backend.app.runs import RunRegistry, RunRepository
 from backend.app.runtime import RuntimeOffloadService
 from backend.app.security import LocalSessionManager, SecretStore, WindowsDpapiSecretStore
@@ -87,6 +88,23 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             },
         )
         await background_jobs.start()
+        retrieval_runtime = RetrievalRuntime(resolved_settings, database)
+
+        async def persist_retrieval_job(_connection, _job, _result) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        retrieval_jobs = BackgroundJobCoordinator(
+            job_repository,
+            idle_seconds=resolved_settings.memory_background_idle_seconds,
+            runner=retrieval_runtime.indexer.run,
+            persister=persist_retrieval_job,
+            kinds={
+                JobKind.RETRIEVAL_INDEX_MESSAGE,
+                JobKind.RETRIEVAL_INDEX_MEMORY,
+                JobKind.RETRIEVAL_REINDEX,
+            },
+        )
+        await retrieval_jobs.start()
         summary_service = SummaryService(
             resolved_settings,
             resolved_backend,
@@ -117,6 +135,8 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
         app.state.conversation_repository = conversation_repository
         app.state.job_repository = job_repository
         app.state.background_jobs = background_jobs
+        app.state.retrieval_jobs = retrieval_jobs
+        app.state.retrieval_runtime = retrieval_runtime
         app.state.memory_repository = memory_repository
         app.state.conversation_chat_service = ConversationChatService(
             resolved_settings,
@@ -125,6 +145,10 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             conversation_repository,
             context_builder,
             REPOSITORY_ROOT,
+            retrieval_service=retrieval_runtime.service,
+            retrieval_assembler=retrieval_runtime.context_assembler,
+            retrieval_audit=retrieval_runtime.audit,
+            retrieval_profile=retrieval_runtime.profile,
         )
         app.state.chat_service = ChatService(
             resolved_settings,
@@ -155,6 +179,8 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
                 await asyncio.gather(backup_task, return_exceptions=True)
             await app.state.voice_job_registry.shutdown()
             await app.state.background_jobs.shutdown()
+            await app.state.retrieval_jobs.shutdown()
+            await app.state.retrieval_runtime.close()
 
     application = FastAPI(
         title="Psych-local", version=resolved_settings.app_version, lifespan=lifespan

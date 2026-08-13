@@ -36,6 +36,13 @@ router = APIRouter(prefix="/v1")
 protected = [Depends(require_local_session)]
 
 
+async def note_interactive_activity(request: Request) -> None:
+    await request.app.state.background_jobs.note_interactive_activity()
+    retrieval_jobs = getattr(request.app.state, "retrieval_jobs", None)
+    if retrieval_jobs is not None:
+        await retrieval_jobs.note_interactive_activity()
+
+
 def error_response(code: str, retryable: bool, status_code: int) -> JSONResponse:
     return JSONResponse({"error": {"code": code, "retryable": retryable}}, status_code=status_code)
 
@@ -177,7 +184,7 @@ async def stt_model(request: Request) -> dict[str, Any]:
 
 @router.post("/stt/jobs", status_code=201, dependencies=protected)
 async def create_voice_job(payload: VoiceJobCreateRequest, request: Request) -> JSONResponse:
-    await request.app.state.background_jobs.note_interactive_activity()
+    await note_interactive_activity(request)
     try:
         await request.app.state.conversation_repository.get(payload.conversation_id)
         job = await request.app.state.voice_job_registry.create(
@@ -274,9 +281,7 @@ async def memory_status(request: Request) -> dict[str, Any]:
 
 
 @router.post("/memory/backfill", dependencies=protected)
-async def memory_backfill(
-    payload: MemoryBackfillRequest, request: Request
-) -> JSONResponse:
+async def memory_backfill(payload: MemoryBackfillRequest, request: Request) -> JSONResponse:
     repository = request.app.state.memory_repository
     preview = await repository.preview_backfill(
         conversation_ids=payload.conversation_ids,
@@ -504,7 +509,7 @@ async def conversation_messages(
 async def conversation_turn(
     conversation_id: str, payload: TurnRequest, request: Request
 ) -> StreamingResponse | JSONResponse:
-    await request.app.state.background_jobs.note_interactive_activity()
+    await note_interactive_activity(request)
     settings = request.app.state.settings
     defaults = {
         "temperature": settings.default_temperature,
@@ -546,7 +551,7 @@ async def conversation_turn(
 
 @router.post("/chat", dependencies=protected)
 async def chat(payload: ChatRequest, request: Request) -> StreamingResponse:
-    await request.app.state.background_jobs.note_interactive_activity()
+    await note_interactive_activity(request)
     settings = request.app.state.settings
     defaults = {
         "temperature": settings.default_temperature,
@@ -579,3 +584,14 @@ async def cancel(run_id: str, request: Request) -> JSONResponse:
     except RunAlreadyFinishedError:
         return error_response("RUN_ALREADY_FINISHED", False, 409)
     return JSONResponse({"run_id": run.id, "status": "cancelling"}, status_code=202)
+
+
+@router.get("/runs/{run_id}/retrieval", dependencies=protected)
+async def retrieval_trace(run_id: str, request: Request) -> JSONResponse:
+    runtime = getattr(request.app.state, "retrieval_runtime", None)
+    if runtime is None:
+        return error_response("RETRIEVAL_UNAVAILABLE", False, 503)
+    trace = await runtime.audit.for_model_run(run_id)
+    if trace is None:
+        return error_response("RETRIEVAL_TRACE_NOT_FOUND", False, 404)
+    return JSONResponse(trace)

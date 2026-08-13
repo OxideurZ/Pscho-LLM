@@ -160,6 +160,63 @@ async def test_short_context_uses_raw_messages_and_current_user_once(tmp_path: P
 
 
 @pytest.mark.asyncio
+async def test_retrieval_context_is_system_data_and_never_duplicates_current_user(
+    tmp_path: Path,
+) -> None:
+    database = Database(tmp_path / "app.sqlite", REPOSITORY_ROOT / "migrations")
+    await database.migrate()
+    repository = ConversationRepository(database)
+    conversation = await repository.create()
+    current = await repository.begin_turn(
+        conversation_id=conversation.id,
+        client_turn_id=str(uuid4()),
+        content="Message USER courant",
+        input_type="text",
+        ids=ids(),
+        run_metadata=metadata(),
+    )
+
+    result = await ContextBuilder(repository, AsyncMock()).build_context(
+        conversation_id=conversation.id,
+        current_message_id=current.user_message.id,
+        system_prompt="SYSTEM",
+        retrieval_context="HISTORIQUE INERTE",
+        budget=ContextBudget(10_000, 100, 100, 1000, 5000),
+    )
+
+    assert result.messages[0].role.value == "system"
+    assert result.messages[0].content == "SYSTEM\n\nHISTORIQUE INERTE"
+    assert sum(message.content == "Message USER courant" for message in result.messages) == 1
+
+
+@pytest.mark.asyncio
+async def test_retrieval_is_trimmed_before_normal_conversation_context(tmp_path: Path) -> None:
+    database = Database(tmp_path / "app.sqlite", REPOSITORY_ROOT / "migrations")
+    await database.migrate()
+    repository = ConversationRepository(database)
+    conversation = await repository.create()
+    current = await repository.begin_turn(
+        conversation_id=conversation.id,
+        client_turn_id=str(uuid4()),
+        content="Message courant",
+        input_type="text",
+        ids=ids(),
+        run_metadata=metadata(),
+    )
+
+    result = await ContextBuilder(repository, AsyncMock()).build_context(
+        conversation_id=conversation.id,
+        current_message_id=current.user_message.id,
+        system_prompt="SYSTEM",
+        retrieval_context="x" * 500,
+        budget=ContextBudget(300, 50, 50, 256, 256),
+    )
+
+    assert result.messages[0].content == "SYSTEM"
+    assert result.messages[-1].content == "Message courant"
+
+
+@pytest.mark.asyncio
 async def test_context_builder_never_reads_memory_tables_before_milestone_g(tmp_path: Path) -> None:
     """F persists sourced memories but deliberately does not inject them into chat context."""
     database = Database(tmp_path / "app.sqlite", REPOSITORY_ROOT / "migrations")

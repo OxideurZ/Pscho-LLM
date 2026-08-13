@@ -80,15 +80,23 @@ class ContextBuilder:
         system_prompt: str,
         budget: ContextBudget,
         cancel_event: asyncio.Event | None = None,
+        retrieval_context: str | None = None,
     ) -> ContextBuildResult:
         raw = await self.repository.context_messages(conversation_id, current_message_id)
         raw_messages = [
             LLMMessage(role=LLMRole(message.role.value), content=message.content) for message in raw
         ]
-        full = [LLMMessage(role=LLMRole.SYSTEM, content=system_prompt), *raw_messages]
+        enriched_system = self._with_retrieval(system_prompt, retrieval_context)
+        full = [LLMMessage(role=LLMRole.SYSTEM, content=enriched_system), *raw_messages]
         full_count = self.token_counter.upper_bound(full)
         if full_count <= budget.max_input_tokens:
             return ContextBuildResult(full, full_count, None)
+        # Historical retrieval is expendable. It must never displace the current USER or
+        # force summarization when the normal recent conversation already fits.
+        without_retrieval = [LLMMessage(role=LLMRole.SYSTEM, content=system_prompt), *raw_messages]
+        without_retrieval_count = self.token_counter.upper_bound(without_retrieval)
+        if retrieval_context and without_retrieval_count <= budget.max_input_tokens:
+            return ContextBuildResult(without_retrieval, without_retrieval_count, None)
 
         recent: list[Message] = []
         for message in reversed(raw):
@@ -112,7 +120,7 @@ class ContextBuilder:
             conversation_id, old, cancel_event
         )
         combined_system = (
-            f"{system_prompt.rstrip()}\n\n"
+            f"{enriched_system.rstrip()}\n\n"
             "Résumé roulant durable des échanges plus anciens (JSON de provenance validée) :\n"
             f"{summary_content}"
         )
@@ -124,8 +132,23 @@ class ContextBuilder:
             ],
         ]
         count = self.token_counter.upper_bound(messages)
+        if count > budget.max_input_tokens and retrieval_context:
+            combined_system = (
+                f"{system_prompt.rstrip()}\n\n"
+                "Resume roulant durable des echanges plus anciens "
+                "(JSON de provenance validee) :\n"
+                f"{summary_content}"
+            )
+            messages[0] = LLMMessage(role=LLMRole.SYSTEM, content=combined_system)
+            count = self.token_counter.upper_bound(messages)
         if count > budget.max_input_tokens:
             raise ContextBudgetExceededError(
                 f"Built context upper bound {count} exceeds {budget.max_input_tokens}"
             )
         return ContextBuildResult(messages, count, summary_id)
+
+    @staticmethod
+    def _with_retrieval(system_prompt: str, retrieval_context: str | None) -> str:
+        if not retrieval_context:
+            return system_prompt
+        return f"{system_prompt.rstrip()}\n\n{retrieval_context}"

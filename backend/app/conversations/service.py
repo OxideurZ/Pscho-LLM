@@ -2,6 +2,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import suppress
+from datetime import UTC, datetime
 from pathlib import Path
 from time import monotonic
 
@@ -15,6 +16,13 @@ from backend.app.conversations.repository import ConversationRepository, new_id
 from backend.app.llm.base import LLMBackend
 from backend.app.llm.errors import LLMError
 from backend.app.llm.models import GenerationOptions, LLMStreamEvent
+from backend.app.retrieval import (
+    RetrievalAuditRepository,
+    RetrievalContextAssembler,
+    RetrievalProfile,
+    RetrievalQuery,
+    RetrievalService,
+)
 from backend.app.runs import ActiveRun, RunRegistry, RunStatus
 from backend.app.summaries import SummaryGenerationError
 
@@ -31,6 +39,10 @@ class ConversationChatService:
         repository: ConversationRepository,
         context_builder: ContextBuilder,
         repository_root: Path,
+        retrieval_service: RetrievalService | None = None,
+        retrieval_assembler: RetrievalContextAssembler | None = None,
+        retrieval_audit: RetrievalAuditRepository | None = None,
+        retrieval_profile: RetrievalProfile | None = None,
     ) -> None:
         self.settings = settings
         self.backend = backend
@@ -38,6 +50,10 @@ class ConversationChatService:
         self.repository = repository
         self.context_builder = context_builder
         self.repository_root = repository_root
+        self.retrieval_service = retrieval_service
+        self.retrieval_assembler = retrieval_assembler
+        self.retrieval_audit = retrieval_audit
+        self.retrieval_profile = retrieval_profile
 
     async def stream_turn(
         self,
@@ -120,6 +136,74 @@ class ConversationChatService:
                     "reused": False,
                 },
             )
+            retrieval_context: str | None = None
+            if (
+                self.retrieval_service is not None
+                and self.retrieval_assembler is not None
+                and self.retrieval_profile is not None
+            ):
+                retrieval_started = monotonic()
+                recent = await self.repository.context_messages(
+                    conversation_id, turn.user_message.id
+                )
+                query = RetrievalQuery(
+                    current_user_text=content,
+                    current_message_id=turn.user_message.id,
+                    conversation_id=conversation_id,
+                    recent_context=[message.content for message in recent[-8:]],
+                    timestamp=datetime.now(UTC).isoformat(),
+                    exclusions={message.id for message in recent},
+                )
+                try:
+                    run.task = asyncio.create_task(
+                        self.retrieval_service.retrieve(query),
+                        name=f"retrieval-{run.id}",
+                    )
+                    outcome = await run.task
+                except asyncio.CancelledError:
+                    if not run.cancel_event.is_set():
+                        raise
+                    await self._finalize(
+                        run,
+                        turn,
+                        content_buffer,
+                        MessageStatus.INTERRUPTED,
+                        RunStatus.CANCELLED,
+                    )
+                    terminal_sent = True
+                    yield serialize_sse("cancelled", {"run_id": run.id})
+                    return
+                finally:
+                    run.task = None
+                assembled = self.retrieval_assembler.assemble(
+                    outcome.items,
+                    recent_contents={message.content for message in recent},
+                )
+                retrieval_context = assembled.content
+                if self.retrieval_audit is not None:
+                    try:
+                        await self.retrieval_audit.record(
+                            model_run_id=run.id,
+                            conversation_id=conversation_id,
+                            query=content,
+                            profile_version=self.retrieval_profile.version,
+                            outcome=outcome,
+                            candidates=outcome.items,
+                            injected={
+                                (
+                                    item.document.source_type.value,
+                                    item.document.source_id,
+                                )
+                                for item in assembled.items
+                            },
+                            started_at=retrieval_started,
+                        )
+                    except Exception as error:
+                        logger.error(
+                            "retrieval_audit_failed run_id=%s error_type=%s",
+                            run.id,
+                            type(error).__name__,
+                        )
 
             try:
                 context = await self.context_builder.build_context(
@@ -134,6 +218,7 @@ class ConversationChatService:
                         recent_raw_budget_tokens=self.settings.recent_raw_budget_tokens,
                     ),
                     cancel_event=run.cancel_event,
+                    retrieval_context=retrieval_context,
                 )
                 upstream_messages = context.messages
             except asyncio.CancelledError:

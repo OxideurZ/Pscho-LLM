@@ -1,3 +1,6 @@
+from backend.app.retrieval.audit import RetrievalAuditRepository
+from backend.app.retrieval.context import RetrievalContextAssembler, RetrievalContextResult
+from backend.app.retrieval.factory import RetrievalRuntime
 from backend.app.retrieval.indexer import RetrievalIndexer
 from backend.app.retrieval.interfaces import Embedder, Reranker, VectorStore
 from backend.app.retrieval.models import (
@@ -39,6 +42,7 @@ __all__ = [
     "Reranker",
     "RerankInput",
     "RetrievalDocument",
+    "RetrievalAuditRepository",
     "RetrievalCandidate",
     "RetrievalIndexer",
     "RetrievalModelInfo",
@@ -46,6 +50,9 @@ __all__ = [
     "RetrievalProfile",
     "RetrievalQuery",
     "RetrievalSelector",
+    "RetrievalContextAssembler",
+    "RetrievalContextResult",
+    "RetrievalRuntime",
     "RetrievalService",
     "RetrievalSourceType",
     "RetrievalSourceRepository",
