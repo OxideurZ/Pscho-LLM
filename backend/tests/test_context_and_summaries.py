@@ -160,6 +160,44 @@ async def test_short_context_uses_raw_messages_and_current_user_once(tmp_path: P
 
 
 @pytest.mark.asyncio
+async def test_context_builder_never_reads_memory_tables_before_milestone_g(tmp_path: Path) -> None:
+    """F persists sourced memories but deliberately does not inject them into chat context."""
+    database = Database(tmp_path / "app.sqlite", REPOSITORY_ROOT / "migrations")
+    await database.migrate()
+    repository = ConversationRepository(database)
+    conversation = await repository.create()
+    current = await repository.begin_turn(
+        conversation_id=conversation.id,
+        client_turn_id=str(uuid4()),
+        content="Question sans mémoire injectée",
+        input_type="text",
+        ids=ids(),
+        run_metadata=metadata(),
+    )
+    now = "2026-08-13T00:00:00+00:00"
+    async with database.connect() as connection:
+        await connection.execute(
+            """
+            INSERT INTO memory_items(
+                id, kind, status, content, epistemic_status, observed_at,
+                last_supported_at, created_at, updated_at
+            ) VALUES ('memory_isolated', 'preference', 'active', 'NEVER_INJECT_THIS',
+                      'stated', ?, ?, ?, ?)
+            """,
+            (now, now, now, now),
+        )
+        await connection.commit()
+    result = await ContextBuilder(repository, AsyncMock()).build_context(
+        conversation_id=conversation.id,
+        current_message_id=current.user_message.id,
+        system_prompt="SYSTEM",
+        budget=ContextBudget(10_000, 100, 100, 1000, 5000),
+    )
+
+    assert all("NEVER_INJECT_THIS" not in message.content for message in result.messages)
+
+
+@pytest.mark.asyncio
 async def test_long_context_uses_summary_and_recent_raw_within_budget(tmp_path: Path) -> None:
     database = Database(tmp_path / "app.sqlite", REPOSITORY_ROOT / "migrations")
     await database.migrate()
