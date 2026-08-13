@@ -97,6 +97,16 @@ def test_session_heartbeat_is_available_without_touching_user_data(tmp_path: Pat
     assert response.json() == {"status": "authenticated"}
 
 
+def test_liveness_does_not_depend_on_model_health(tmp_path: Path) -> None:
+    app = create_app(settings_for(tmp_path / "runs.db"), FakeBackend("unavailable"))
+
+    with TestClient(app) as client:
+        response = client.get("/v1/live")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_runtime_offload_endpoint_schedules_shutdown(tmp_path: Path) -> None:
     app = create_app(settings_for(tmp_path / "runs.db"), FakeBackend())
 

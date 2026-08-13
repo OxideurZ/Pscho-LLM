@@ -19,6 +19,7 @@ import webbrowser
 from base64 import urlsafe_b64encode
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -50,9 +51,9 @@ def local_url(host: str, port: int, path: str) -> str:
     return f"http://{host}:{port}{path}"
 
 
-def reachable(url: str) -> bool:
+def reachable(url: str, timeout: float = 2) -> bool:
     try:
-        with urlopen(url, timeout=2) as response:  # noqa: S310 - local URLs only
+        with urlopen(url, timeout=timeout) as response:  # noqa: S310 - local URLs only
             return 200 <= response.status < 300
     except (OSError, URLError):
         return False
@@ -95,6 +96,33 @@ def process_identity_matches(pid: int, *tokens: str) -> bool:
     except (psutil.Error, OSError):
         return False
     return all(token.lower() in command for token in tokens)
+
+
+def discover_processes(*tokens: str) -> list[int]:
+    """Find root processes for a role, started from this repository."""
+    candidates: list[tuple[int, int]] = []
+    expected_cwd = REPOSITORY_ROOT.resolve()
+    for process in psutil.process_iter(["pid", "ppid", "cmdline", "cwd"]):
+        try:
+            command = [str(argument).lower() for argument in process.info["cmdline"] or []]
+            cwd = Path(process.info["cwd"] or "").resolve()
+            exact_tokens = {token.lower() for token in tokens}
+            executable_stem = Path(command[0]).stem if command else ""
+            matches = all(
+                token in command or (token == "llama-server" and executable_stem == token)
+                for token in exact_tokens
+            )
+            if cwd == expected_cwd and matches:
+                candidates.append((process.info["pid"], process.info["ppid"]))
+        except (psutil.Error, OSError):
+            continue
+    candidate_pids = {pid for pid, _ in candidates}
+    return [pid for pid, parent in candidates if parent not in candidate_pids]
+
+
+def discover_process(*tokens: str) -> int | None:
+    roots = discover_processes(*tokens)
+    return roots[0] if len(roots) == 1 else None
 
 
 def terminate_owned(pid: int) -> bool:
@@ -150,7 +178,7 @@ class Launcher:
         instance = self.read_instance()
         if instance is None:
             return False
-        backend_url = local_url(self.settings.psych_local_host, instance.backend_port, "/v1/health")
+        backend_url = local_url(self.settings.psych_local_host, instance.backend_port, "/v1/live")
         llama_url = f"http://{self.settings.psych_local_host}:{instance.llama_port}/health"
         valid = (
             instance.backend_port == self.backend_port
@@ -159,12 +187,43 @@ class Launcher:
             and pid_alive(instance.llama_pid)
             and process_identity_matches(instance.backend_pid, "uvicorn", "backend.app.main:app")
             and process_identity_matches(instance.llama_pid, "llama-server")
-            and reachable(backend_url)
-            and reachable(llama_url)
+            and reachable(backend_url, timeout=5)
+            and reachable(llama_url, timeout=5)
         )
         if not valid:
             self.log("instance_state=stale")
         return valid
+
+    def recover_healthy_instance(self) -> Instance | None:
+        backend_pid = discover_process("uvicorn", "backend.app.main:app")
+        llama_pid = discover_process("llama-server", str(self.settings.model_path))
+        if backend_pid is None or llama_pid is None:
+            return None
+        instance = Instance(
+            str(uuid.uuid4()),
+            datetime.now(UTC).isoformat(),
+            os.getpid(),
+            backend_pid,
+            llama_pid,
+            None,
+            self.backend_port,
+            self.llama_port,
+        )
+        self.instance_path.write_text(json.dumps(asdict(instance), indent=2), encoding="utf-8")
+        return instance
+
+    def cleanup_owned_processes(self) -> None:
+        pids = {
+            *discover_processes("uvicorn", "backend.app.main:app"),
+            *discover_processes("llama-server", str(self.settings.model_path)),
+        }
+        if not pids:
+            return
+        print("Nettoyage d’une instance Psych-local incomplète…")
+        if not all(terminate_owned(pid) for pid in pids):
+            raise RuntimeError("Impossible d’arrêter complètement l’ancienne instance Psych-local.")
+        self.instance_path.unlink(missing_ok=True)
+        self.log("instance_state=partial_owned_cleanup")
 
     def clear_stale(self) -> None:
         if self.instance_path.exists() and not self.healthy_instance():
@@ -198,17 +257,12 @@ class Launcher:
         verify(self.settings.whisper_model_path, self.settings.whisper_model_expected_sha256)
 
     def assert_ports_available(self) -> None:
-        backend_health = local_url(self.settings.psych_local_host, self.backend_port, "/v1/health")
-        if not port_is_free(self.settings.psych_local_host, self.backend_port) and not reachable(
-            backend_health
-        ):
+        if not port_is_free(self.settings.psych_local_host, self.backend_port):
             raise RuntimeError(
                 f"Port backend {self.backend_port} occupé par un processus tiers ou inconnu ; "
                 "aucun processus n’a été arrêté."
             )
-        if not port_is_free(self.settings.psych_local_host, self.llama_port) and not reachable(
-            f"{self.settings.llama_server_url}/health"
-        ):
+        if not port_is_free(self.settings.psych_local_host, self.llama_port):
             raise RuntimeError(
                 f"Port moteur {self.llama_port} occupé par un processus tiers ou inconnu ; "
                 "aucun processus n’a été arrêté."
@@ -224,13 +278,15 @@ class Launcher:
         # A healthy local API plus a healthy engine is a stronger identity signal
         # than a stale/missing PID file. Do not create a duplicate stack.
         if reachable(
-            local_url(self.settings.psych_local_host, self.backend_port, "/v1/health")
+            local_url(self.settings.psych_local_host, self.backend_port, "/v1/live")
         ) and reachable(f"{self.settings.llama_server_url}/health"):
-            self.log("instance_state=discovered_healthy")
-            print("Psych-local est déjà démarré et opérationnel.")
-            if open_browser:
-                webbrowser.open(self.browser_url())
-            return
+            if self.recover_healthy_instance() is not None:
+                self.log("instance_state=recovered_healthy")
+                print("Psych-local est déjà démarré et opérationnel.")
+                if open_browser:
+                    webbrowser.open(self.browser_url())
+                return
+        self.cleanup_owned_processes()
         self.clear_stale()
         print("Vérification de l’installation et du modèle…")
         self.verify_installation()
@@ -289,7 +345,7 @@ class Launcher:
                 )
             self.log(f"backend_state=started pid={backend.pid}")
             wait_ready(
-                local_url(self.settings.psych_local_host, self.backend_port, "/v1/health"),
+                local_url(self.settings.psych_local_host, self.backend_port, "/v1/live"),
                 self.settings.launcher_backend_timeout_seconds,
                 "Le backend",
             )
@@ -305,7 +361,11 @@ class Launcher:
             )
             self.instance_path.write_text(json.dumps(asdict(instance), indent=2), encoding="utf-8")
             self.log("instance_state=ready")
-            print("Psych-local est prêt. Ouverture du navigateur…")
+            print(
+                "Psych-local est prêt. Ouverture du navigateur…"
+                if open_browser
+                else "Psych-local est prêt."
+            )
             if open_browser:
                 webbrowser.open(self.browser_url())
         except Exception:

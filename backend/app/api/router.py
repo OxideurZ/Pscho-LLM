@@ -131,6 +131,12 @@ async def health(request: Request) -> dict[str, Any]:
     }
 
 
+@router.get("/live")
+async def liveness() -> dict[str, str]:
+    """Cheap process liveness probe with no model or database dependency."""
+    return {"status": "ok"}
+
+
 @router.get("/models")
 async def models(request: Request) -> dict[str, Any]:
     model = await request.app.state.llm_backend.model_info()

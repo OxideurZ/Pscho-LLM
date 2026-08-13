@@ -34,7 +34,7 @@ def test_stale_instance_is_not_trusted_from_pid_alone(tmp_path, monkeypatch):
     )
     monkeypatch.setattr("scripts.launcher.pid_alive", lambda _pid: True)
     monkeypatch.setattr("scripts.launcher.process_identity_matches", lambda *_args: True)
-    monkeypatch.setattr("scripts.launcher.reachable", lambda _url: False)
+    monkeypatch.setattr("scripts.launcher.reachable", lambda _url, **_kwargs: False)
 
     assert launcher.healthy_instance() is False
     launcher.clear_stale()
@@ -60,7 +60,7 @@ def test_healthy_instance_requires_matching_ports_pids_and_health(tmp_path, monk
     )
     monkeypatch.setattr("scripts.launcher.pid_alive", lambda _pid: True)
     monkeypatch.setattr("scripts.launcher.process_identity_matches", lambda *_args: True)
-    monkeypatch.setattr("scripts.launcher.reachable", lambda _url: True)
+    monkeypatch.setattr("scripts.launcher.reachable", lambda _url, **_kwargs: True)
 
     assert launcher.healthy_instance() is True
 
@@ -92,7 +92,7 @@ def test_reused_pid_with_a_third_party_command_is_not_owned(tmp_path, monkeypatc
 def test_port_collision_never_attempts_to_kill_a_third_party(tmp_path, monkeypatch):
     launcher = Launcher(settings_for_launcher(tmp_path))
     monkeypatch.setattr("scripts.launcher.port_is_free", lambda *_args: False)
-    monkeypatch.setattr("scripts.launcher.reachable", lambda _url: False)
+    monkeypatch.setattr("scripts.launcher.reachable", lambda _url: True)
 
     try:
         launcher.assert_ports_available()
@@ -102,17 +102,48 @@ def test_port_collision_never_attempts_to_kill_a_third_party(tmp_path, monkeypat
         raise AssertionError("a foreign port collision must be reported")
 
 
-def test_start_reuses_a_healthy_discovered_stack_without_pid_file(tmp_path, monkeypatch):
+def test_partial_owned_stack_is_fully_cleaned_before_restart(tmp_path, monkeypatch):
+    launcher = Launcher(settings_for_launcher(tmp_path))
+    stopped = []
+    monkeypatch.setattr(
+        "scripts.launcher.discover_processes",
+        lambda *tokens: [123] if "uvicorn" in tokens else [456, 789],
+    )
+    monkeypatch.setattr("scripts.launcher.terminate_owned", lambda pid: stopped.append(pid) or True)
+
+    launcher.cleanup_owned_processes()
+
+    assert set(stopped) == {123, 456, 789}
+
+
+def test_start_recovers_a_healthy_discovered_stack(tmp_path, monkeypatch):
     launcher = Launcher(settings_for_launcher(tmp_path))
     opened = []
+    recovered = Mock(return_value=Mock())
     monkeypatch.setattr(launcher, "healthy_instance", lambda: False)
+    monkeypatch.setattr(launcher, "recover_healthy_instance", recovered)
     monkeypatch.setattr("scripts.launcher.reachable", lambda _url: True)
     monkeypatch.setattr("scripts.launcher.webbrowser.open", opened.append)
 
     launcher.start(open_browser=True)
 
     assert opened == ["http://127.0.0.1:18000/"]
-    assert not launcher.instance_path.exists()
+    recovered.assert_called_once_with()
+
+
+def test_recover_healthy_instance_records_discovered_root_processes(tmp_path, monkeypatch):
+    launcher = Launcher(settings_for_launcher(tmp_path))
+    monkeypatch.setattr(
+        "scripts.launcher.discover_process",
+        lambda *tokens: 123 if "uvicorn" in tokens else 456,
+    )
+
+    recovered = launcher.recover_healthy_instance()
+
+    assert recovered is not None
+    assert recovered.backend_pid == 123
+    assert recovered.llama_pid == 456
+    assert launcher.read_instance() == recovered
 
 
 def test_secure_browser_url_uses_fragment_not_query_string(tmp_path, monkeypatch):
