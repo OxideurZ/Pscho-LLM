@@ -57,6 +57,12 @@ async def bootstrap_session(payload: BootstrapRequest, request: Request) -> JSON
     return response
 
 
+@router.get("/auth/session", dependencies=protected)
+async def authenticated_session() -> dict[str, str]:
+    """Cheap authenticated heartbeat for the local browser UI."""
+    return {"status": "authenticated"}
+
+
 def conversation_error(error: Exception) -> JSONResponse:
     if isinstance(error, ConversationNotFoundError):
         return error_response("CONVERSATION_NOT_FOUND", False, 404)

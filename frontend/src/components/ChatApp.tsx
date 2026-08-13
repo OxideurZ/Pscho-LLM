@@ -116,7 +116,7 @@ export function ChatApp() {
 
         {busy && chat.runId && <button className="stop" type="button" onClick={() => void chat.stop()}>■ Arrêter</button>}
         <form className="composer" onSubmit={chat.submit}>
-          <textarea aria-label="Message" placeholder={chat.selectedId ? "Écrire un message…" : "Créez une conversation pour commencer"} value={chat.draft} onChange={(event) => chat.setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void chat.submit(); } }} disabled={!chat.selectedId || busy || !chat.engineAvailable || chat.connectivity !== "connected"} rows={2} />
+          <textarea aria-label="Message" placeholder={chat.selectedId ? "Écrire un message…" : "Créez une conversation pour commencer"} value={chat.draft} onChange={(event) => chat.setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void chat.submit(); } }} disabled={!chat.selectedId || busy} rows={2} />
           <button type="submit" disabled={!chat.selectedId || busy || !chat.draft.trim() || !chat.engineAvailable || chat.connectivity !== "connected"} aria-label="Envoyer">↑</button>
         </form>
         <label className="voice-auto-send"><input type="checkbox" checked={autoSendVoice} onChange={(event) => setAutoSendVoice(event.target.checked)} /> Envoyer automatiquement la dictée</label>

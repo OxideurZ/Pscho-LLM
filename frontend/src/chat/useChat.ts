@@ -10,6 +10,7 @@ import {
   loadHealth,
   loadRuntimeInfo,
   loadSecurityReadiness,
+  loadSession,
   RunMetrics,
   RuntimeInfo,
   SecurityReadiness,
@@ -69,6 +70,9 @@ export function useChat() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const controllers = useRef<Record<string, AbortController>>({});
   const selectedIdRef = useRef<string | null>(selectedId);
+  const bootstrapTokenRef = useRef<string | undefined>(bootstrapTokenFromFragment());
+  const sessionBootstrappedRef = useRef(false);
+  const reconcileRunningRef = useRef(false);
 
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
@@ -96,38 +100,56 @@ export function useChat() {
     }
   }, []);
 
-  const reconcile = useCallback(async () => {
-    setConnectivity("reconnecting");
+  const reconcile = useCallback(async (refreshData = true, showProgress = true) => {
+    if (reconcileRunningRef.current) return;
+    reconcileRunningRef.current = true;
+    if (showProgress) setConnectivity("reconnecting");
     const retryDelays = [0, 350, 900];
     let lastError: unknown;
-    for (const delay of retryDelays) {
-      if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
-      try {
-        const bootstrapToken = bootstrapTokenFromFragment();
-        await bootstrapSession(bootstrapToken);
-        if (bootstrapToken) window.history.replaceState({}, "", window.location.pathname);
-        const health = await loadHealth();
-        setEngineAvailable(health.llm.status === "ok" && health.llm.model_loaded);
-        void loadRuntimeInfo().then(setRuntimeInfo).catch(() => undefined);
-        void loadSecurityReadiness().then(setSecurityReadiness).catch(() => undefined);
-        setConnectivity("connected");
-        const availableConversations = await refreshConversations();
-        const id = selectedIdRef.current;
-        if (id && availableConversations.some((conversation) => conversation.id === id)) {
-          await refreshMessages(id);
-        } else if (id) {
-          setSelectedId(null);
-          if (window.location.pathname.startsWith(routePrefix)) window.history.replaceState({}, "", "/");
+    try {
+      for (const delay of retryDelays) {
+        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        try {
+          const bootstrapToken = bootstrapTokenRef.current;
+          if (bootstrapToken && !sessionBootstrappedRef.current) {
+            await bootstrapSession(bootstrapToken);
+            sessionBootstrappedRef.current = true;
+            if (window.location.hash) {
+              window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+            }
+          }
+          const [health] = await Promise.all([loadHealth(), loadSession()]);
+          setEngineAvailable(health.llm.status === "ok" && health.llm.model_loaded);
+          void loadRuntimeInfo().then(setRuntimeInfo).catch(() => undefined);
+          void loadSecurityReadiness().then(setSecurityReadiness).catch(() => undefined);
+          setConnectivity("connected");
+          if (refreshData) {
+            const availableConversations = await refreshConversations();
+            const id = selectedIdRef.current;
+            if (id && availableConversations.some((conversation) => conversation.id === id)) {
+              await refreshMessages(id);
+            } else if (id) {
+              setSelectedId(null);
+              if (window.location.pathname.startsWith(routePrefix)) window.history.replaceState({}, "", "/");
+            }
+          }
+          return;
+        } catch (error) {
+          lastError = error;
+          if (error instanceof ApiError && error.status === 401 && bootstrapTokenRef.current) {
+            // A backend restart invalidates its in-memory sessions. The launch
+            // token remains only in this tab's memory so it can recover safely.
+            sessionBootstrappedRef.current = false;
+          }
         }
-        return;
-      } catch (error) {
-        lastError = error;
       }
-    }
-    setEngineAvailable(false);
-    setConnectivity("unavailable");
-    if (lastError instanceof ApiError && lastError.code !== "BACKEND_UNAVAILABLE") {
-      // The app stays usable after the next explicit retry; no stale run is retained.
+      setEngineAvailable(false);
+      setConnectivity("unavailable");
+      if (lastError instanceof ApiError && lastError.code !== "BACKEND_UNAVAILABLE") {
+        // The next automatic or explicit retry can still recover the UI.
+      }
+    } finally {
+      reconcileRunningRef.current = false;
     }
   }, [refreshConversations, refreshMessages]);
 
@@ -139,7 +161,8 @@ export function useChat() {
       if (mounted) setListLoading(false);
     };
     void initialLoad();
-    const healthTimer = window.setInterval(() => { void reconcile(); }, 15_000);
+    // Healthy background checks stay invisible and never lock text or voice.
+    const healthTimer = window.setInterval(() => { void reconcile(false, false); }, 15_000);
     const popState = () => {
       setSettingsOpen(window.location.pathname === "/settings");
       void selectConversation(routeConversationId(), false);
@@ -278,7 +301,7 @@ export function useChat() {
   return useMemo(() => ({
     conversations, archived, changeArchive, selectedId, selectConversation, newConversation, renameConversation, archiveConversation,
     messages, draft, setDraft, state: currentRuntime.state, runId: currentRuntime.runId, metrics: currentRuntime.metrics,
-    error: currentRuntime.error, connectivity, engineAvailable, listLoading, messagesLoading, submit, submitVoice, stop, retry: reconcile,
+    error: currentRuntime.error, connectivity, engineAvailable, listLoading, messagesLoading, submit, submitVoice, stop, retry: () => reconcile(true, true),
     settingsOpen, showSettings, runtimeInfo, securityReadiness,
   }), [archiveConversation, archived, changeArchive, connectivity, conversations, currentRuntime, draft, engineAvailable, listLoading, messages, messagesLoading, newConversation, reconcile, renameConversation, selectConversation, selectedId, settingsOpen, showSettings, stop, submit, submitVoice, runtimeInfo, securityReadiness]);
 }

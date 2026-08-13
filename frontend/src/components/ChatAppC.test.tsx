@@ -44,6 +44,7 @@ describe("Milestone C conversation shell", () => {
     expect(screen.getByText("Psych-local n’arrive plus à joindre son backend local.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Réessayer" }));
     expect(mocked.value.retry).toHaveBeenCalledOnce();
+    expect((screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement).disabled).toBe(false);
 
     mocked.value = { ...mocked.value, connectivity: "connected" };
     render(<ChatApp />);

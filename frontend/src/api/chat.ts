@@ -8,6 +8,9 @@ export const bootstrapSession = (bootstrapToken?: string) =>
     body: JSON.stringify(bootstrapToken ? { bootstrap_token: bootstrapToken } : {}),
   });
 
+export const loadSession = () =>
+  requestJson<{ status: "authenticated" }>("/v1/auth/session");
+
 export type ChatRole = "user" | "assistant";
 
 export interface ChatMessage {

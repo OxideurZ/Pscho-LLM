@@ -87,6 +87,16 @@ def test_production_frontend_is_served_with_spa_fallback(tmp_path: Path) -> None
     assert health.status_code == 200
 
 
+def test_session_heartbeat_is_available_without_touching_user_data(tmp_path: Path) -> None:
+    app = create_app(settings_for(tmp_path / "runs.db"), FakeBackend())
+
+    with TestClient(app) as client:
+        response = client.get("/v1/auth/session")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "authenticated"}
+
+
 def test_runtime_offload_endpoint_schedules_shutdown(tmp_path: Path) -> None:
     app = create_app(settings_for(tmp_path / "runs.db"), FakeBackend())
 
