@@ -180,16 +180,19 @@ class Database:
                         f"VALUES ({migration.version}, '{name}', '{checksum}', '{applied_at}');\n"
                         "COMMIT;"
                     )
-                    # Migration 009 rebuilds model_runs while messages already reference it.
-                    # SQLite/SQLCipher cannot defer DROP TABLE foreign-key checks for this pattern.
-                    # Keep the historical migration checksum immutable and scope this compatibility
-                    # mode to that one rebuild, followed by an explicit integrity check.
-                    legacy_rebuild = migration.name == "model_run_memory_kinds"
-                    if legacy_rebuild:
+                    # Some migrations rebuild a referenced table. SQLite/SQLCipher cannot defer
+                    # DROP TABLE foreign-key checks for this pattern. Keep historical migration
+                    # checksums immutable and scope compatibility mode to named rebuilds, followed
+                    # by an explicit integrity check.
+                    referenced_table_rebuild = migration.name in {
+                        "model_run_memory_kinds",
+                        "retrieval_foundations",
+                    }
+                    if referenced_table_rebuild:
                         await connection.execute("PRAGMA foreign_keys = OFF")
                     try:
                         await connection.executescript(atomic_script)
-                        if legacy_rebuild:
+                        if referenced_table_rebuild:
                             await connection.execute("PRAGMA foreign_keys = ON")
                             violations = await (
                                 await connection.execute("PRAGMA foreign_key_check")
@@ -205,7 +208,7 @@ class Database:
                             f"Migration {migration.version:03d}_{migration.name} failed"
                         ) from error
                     finally:
-                        if legacy_rebuild:
+                        if referenced_table_rebuild:
                             with suppress(aiosqlite.Error):
                                 await connection.execute("PRAGMA foreign_keys = ON")
                 self.schema_version = self.expected_schema_version

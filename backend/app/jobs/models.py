@@ -7,6 +7,9 @@ class JobKind(StrEnum):
     MEMORY_EXTRACT = "memory_extract"
     MEMORY_CONSOLIDATE = "memory_consolidate"
     MEMORY_BACKFILL = "memory_backfill"
+    RETRIEVAL_INDEX_MESSAGE = "retrieval_index_message"
+    RETRIEVAL_INDEX_MEMORY = "retrieval_index_memory"
+    RETRIEVAL_REINDEX = "retrieval_reindex"
 
 
 class JobStatus(StrEnum):
@@ -27,6 +30,8 @@ class JobRecord(BaseModel):
     priority: int
     dedupe_key: str
     source_message_id: str | None
+    source_type: str | None = None
+    source_id: str | None = None
     backfill_id: str | None = None
     blocked_by_run_id: str | None
     attempts: int = Field(ge=0)
