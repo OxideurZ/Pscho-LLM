@@ -38,6 +38,31 @@ class Settings(BaseSettings):
     context_safety_margin_tokens: int = Field(default=512, ge=0)
     summary_budget_tokens: int = Field(default=4096, ge=256)
     recent_raw_budget_tokens: int = Field(default=24_000, ge=256)
+    embedding_model_name: str = "Qwen/Qwen3-Embedding-0.6B"
+    embedding_model_path: Path = Field(
+        default_factory=lambda: (
+            default_data_directory() / "models" / "retrieval" / "Qwen3-Embedding-0.6B"
+        )
+    )
+    embedding_model_revision: str = "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"
+    embedding_model_expected_sha256: str = (
+        "0437e45c94563b09e13cb7a64478fc406947a93cb34a7e05870fc8dcd48e23fd"
+    )
+    reranker_model_name: str = "Qwen/Qwen3-Reranker-0.6B"
+    reranker_model_path: Path = Field(
+        default_factory=lambda: (
+            default_data_directory() / "models" / "retrieval" / "Qwen3-Reranker-0.6B"
+        )
+    )
+    reranker_model_revision: str = "e61197ed45024b0ed8a2d74b80b4d909f1255473"
+    reranker_model_expected_sha256: str = (
+        "27cd75a405b9c1b46b59abfd88aaa209e6fed2a1972cde9b70e7659537c5e65b"
+    )
+    retrieval_device: str = "cpu"
+    retrieval_embedding_dimensions: int = Field(default=1024, ge=32, le=1024)
+    retrieval_embedding_dtype: str = "float32"
+    retrieval_rerank_top_k: int = Field(default=8, ge=1, le=32)
+    retrieval_interactive_timeout_ms: int = Field(default=6000, ge=100, le=30_000)
     summary_prompt_id: str = "rolling_summary"
     summary_prompt_version: str = "0.1.1"
     memory_extraction_prompt_id: str = "memory_extraction"

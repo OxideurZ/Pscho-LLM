@@ -1,7 +1,7 @@
 from hashlib import sha256
 
 from backend.app.config.prompt import load_prompt
-from backend.app.config.settings import REPOSITORY_ROOT
+from backend.app.config.settings import REPOSITORY_ROOT, Settings
 from backend.app.llm.models import GenerationOptions
 
 
@@ -33,6 +33,26 @@ def test_prompt_v012_tightens_style_without_dropping_epistemic_rules() -> None:
     assert "un à trois" in revised.content
     assert "paragraphes courts" in revised.content
     assert "relève doucement la tension" in revised.content
+
+
+def test_g0_retrieval_runtime_defaults_are_pinned_and_cpu_only() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.embedding_model_name == "Qwen/Qwen3-Embedding-0.6B"
+    assert settings.embedding_model_revision == "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"
+    assert settings.embedding_model_expected_sha256 == (
+        "0437e45c94563b09e13cb7a64478fc406947a93cb34a7e05870fc8dcd48e23fd"
+    )
+    assert settings.reranker_model_name == "Qwen/Qwen3-Reranker-0.6B"
+    assert settings.reranker_model_revision == "e61197ed45024b0ed8a2d74b80b4d909f1255473"
+    assert settings.reranker_model_expected_sha256 == (
+        "27cd75a405b9c1b46b59abfd88aaa209e6fed2a1972cde9b70e7659537c5e65b"
+    )
+    assert settings.retrieval_device == "cpu"
+    assert settings.retrieval_embedding_dimensions == 1024
+    assert settings.retrieval_embedding_dtype == "float32"
+    assert settings.retrieval_rerank_top_k == 8
+    assert settings.retrieval_interactive_timeout_ms == 6000
 
 
 def test_generation_options_are_stable_and_do_not_share_stop_lists() -> None:
