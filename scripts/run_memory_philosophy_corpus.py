@@ -4,11 +4,15 @@
 import argparse
 import asyncio
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.app.config.prompt import load_prompt
 from backend.app.config.settings import REPOSITORY_ROOT, Settings

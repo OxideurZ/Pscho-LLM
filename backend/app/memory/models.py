@@ -66,6 +66,36 @@ class MemoryExtractionResult(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
     candidates: list[MemoryCandidateDraft] = Field(default_factory=list, max_length=8)
 
+    @model_validator(mode="before")
+    @classmethod
+    def discard_unknown_time_fields(cls, value: object) -> object:
+        """Tolerate llama.cpp emitting undocumented temporal compatibility keys.
+
+        The persisted contract remains `start_at`/`end_at`; no temporal value is inferred from
+        this compatibility-only field.
+        """
+        if not isinstance(value, dict):
+            return value
+        candidates = value.get("candidates")
+        if not isinstance(candidates, list):
+            return value
+        normalized = dict(value)
+        normalized_candidates: list[object] = []
+        for candidate in candidates:
+            if not isinstance(candidate, dict) or not isinstance(candidate.get("time"), dict):
+                normalized_candidates.append(candidate)
+                continue
+            normalized_candidate = dict(candidate)
+            normalized_time = {
+                key: item
+                for key, item in candidate["time"].items()
+                if key in {"text", "start_at", "end_at", "precision"}
+            }
+            normalized_candidate["time"] = normalized_time
+            normalized_candidates.append(normalized_candidate)
+        normalized["candidates"] = normalized_candidates
+        return normalized
+
 
 class MemoryConsolidationProposal(BaseModel):
     model_config = ConfigDict(extra="forbid")

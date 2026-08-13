@@ -78,6 +78,39 @@ def test_memory_extraction_schema_caps_candidates() -> None:
         )
 
 
+def test_memory_extraction_discards_undocumented_time_compatibility_fields() -> None:
+    result = MemoryExtractionResult.model_validate(
+        {
+            "schema_version": "1.0",
+            "candidates": [
+                {
+                    "kind": "event",
+                    "content": "L'utilisateur est allé au cinéma.",
+                    "epistemic_status": "stated",
+                    "source_spans": [
+                        {
+                            "message_id": "msg_1",
+                            "start_char": 0,
+                            "end_char": 1,
+                            "quote": "x",
+                        }
+                    ],
+                    "time": {
+                        "text": "hier",
+                        "start_at": None,
+                        "end_at": None,
+                        "precision": "relative",
+                        "iso": None,
+                        "iso_date": None,
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.candidates[0].time.text == "hier"
+
+
 def test_consolidation_contract_allows_actions_but_never_rewritten_content() -> None:
     proposal = MemoryConsolidationProposal(action="merge", target_memory_id="memory_1")
     assert proposal.action == "merge"

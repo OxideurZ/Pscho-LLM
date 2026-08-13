@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-08-09T20:35:16.034608+00:00",
+  "model": "Qwen3.6-35B-A3B-Q4_K_M",
+  "model_sha256": "671e47e0ec53c665d048b98c3ecbfd5236b5ca9c3e02ed19fc8f81f7b85140c7",
+  "prompt": {
+    "id": "memory_extraction",
+    "version": "0.1.2",
+    "sha256": "7d24079b3fb622e8c05fd5fe5eceee9592c21c707e474d9f5a7634706853954f"
+  },
+  "passed": 1,
+  "total": 1,
+  "results": [
+    {
+      "id": "personal_fact_epfl",
+      "gate": "MUST_CAPTURE",
+      "passed": true,
+      "failures": [],
+      "candidates": [
+        {
+          "kind": "personal_fact",
+          "epistemic_status": "stated"
+        }
+      ]
+    }
+  ]
+}
