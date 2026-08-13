@@ -1,3 +1,4 @@
+from backend.app.retrieval.indexer import RetrievalIndexer
 from backend.app.retrieval.interfaces import Embedder, Reranker, VectorStore
 from backend.app.retrieval.models import (
     ComponentHealth,
@@ -11,6 +12,7 @@ from backend.app.retrieval.models import (
     VectorQuery,
     VectorRecord,
 )
+from backend.app.retrieval.repository import RetrievalSourceRepository
 from backend.app.retrieval.store import SqlCipherLexicalIndex, SqlCipherVectorStore
 
 __all__ = [
@@ -21,8 +23,10 @@ __all__ = [
     "Reranker",
     "RerankInput",
     "RetrievalDocument",
+    "RetrievalIndexer",
     "RetrievalModelInfo",
     "RetrievalSourceType",
+    "RetrievalSourceRepository",
     "ScoredSource",
     "SqlCipherLexicalIndex",
     "SqlCipherVectorStore",

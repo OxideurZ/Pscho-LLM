@@ -478,6 +478,15 @@ class ConversationRepository:
                     ),
                 )
                 await self._insert_model_run(connection, ids["run_id"], run_metadata, now)
+                await connection.execute(
+                    """
+                    UPDATE jobs SET blocked_by_run_id = ?, updated_at = ?
+                    WHERE kind = 'retrieval_index_message'
+                      AND source_type = 'raw_user' AND source_id = ?
+                      AND status IN ('pending', 'retry')
+                    """,
+                    (ids["run_id"], now, ids["user_message_id"]),
+                )
                 if memory_job is not None:
                     await connection.execute(
                         """

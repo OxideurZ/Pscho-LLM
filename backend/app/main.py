@@ -16,7 +16,7 @@ from backend.app.conversations.repository import ConversationRepository
 from backend.app.conversations.service import ConversationChatService
 from backend.app.db import Database
 from backend.app.db.migration import EncryptedDatabaseMigrator
-from backend.app.jobs import BackgroundJobCoordinator, JobRepository
+from backend.app.jobs import BackgroundJobCoordinator, JobKind, JobRepository
 from backend.app.llm.base import LLMBackend
 from backend.app.llm.llama_cpp import LlamaCppBackend
 from backend.app.memory import MemoryExtractor, MemoryRepository
@@ -80,6 +80,11 @@ def create_app(settings: Settings | None = None, llm_backend: LLMBackend | None 
             idle_seconds=resolved_settings.memory_background_idle_seconds,
             runner=memory_extractor.run,
             persister=memory_extractor.persist,
+            kinds={
+                JobKind.MEMORY_EXTRACT,
+                JobKind.MEMORY_CONSOLIDATE,
+                JobKind.MEMORY_BACKFILL,
+            },
         )
         await background_jobs.start()
         summary_service = SummaryService(

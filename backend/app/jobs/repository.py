@@ -75,19 +75,28 @@ class JobRepository:
             ).fetchone()
         return JobRecord.model_validate(dict(row)) if row is not None else None
 
-    async def claim_next(self, *, now: str | None = None) -> JobRecord | None:
+    async def claim_next(
+        self, *, now: str | None = None, kinds: set[JobKind] | None = None
+    ) -> JobRecord | None:
         claimed_at = now or datetime.now(UTC).isoformat()
         token = f"lease_{uuid4().hex}"
+        kind_values = sorted(kind.value for kind in kinds) if kinds else []
+        kind_filter = ""
+        parameters: list[str] = [claimed_at]
+        if kind_values:
+            kind_filter = f"AND j.kind IN ({','.join('?' for _ in kind_values)})"
+            parameters.extend(kind_values)
         async with self.database.connect() as connection:
             connection.row_factory = aiosqlite.Row
             await connection.execute("BEGIN IMMEDIATE")
             try:
                 row = await (
                     await connection.execute(
-                        """
+                        f"""
                         SELECT j.* FROM jobs AS j
                         WHERE j.status IN ('pending', 'retry')
                           AND j.available_at <= ?
+                          {kind_filter}
                           AND j.attempts < j.max_attempts
                           AND (
                               j.blocked_by_run_id IS NULL
@@ -100,7 +109,7 @@ class JobRepository:
                         ORDER BY j.priority DESC, j.created_at ASC, j.id ASC
                         LIMIT 1
                         """,
-                        (claimed_at,),
+                        parameters,
                     )
                 ).fetchone()
                 if row is None:

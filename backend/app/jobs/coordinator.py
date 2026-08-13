@@ -7,7 +7,7 @@ from typing import Any
 
 import aiosqlite
 
-from backend.app.jobs.models import JobRecord
+from backend.app.jobs.models import JobKind, JobRecord
 from backend.app.jobs.repository import JobRepository
 
 JobRunner = Callable[[JobRecord, asyncio.Event], Awaitable[Any]]
@@ -33,6 +33,7 @@ class BackgroundJobCoordinator:
         persister: JobPersister | None = None,
         poll_seconds: float = 1.0,
         clock: Callable[[], float] = monotonic,
+        kinds: set[JobKind] | None = None,
     ) -> None:
         if (runner is None) != (persister is None):
             raise ValueError("runner and persister must be configured together")
@@ -42,6 +43,11 @@ class BackgroundJobCoordinator:
         self.persister = persister
         self.poll_seconds = poll_seconds
         self.clock = clock
+        self.kinds = kinds or {
+            JobKind.MEMORY_EXTRACT,
+            JobKind.MEMORY_CONSOLIDATE,
+            JobKind.MEMORY_BACKFILL,
+        }
         self._last_interactive_at = clock()
         self._active: ActiveBackgroundJob | None = None
         self._loop_task: asyncio.Task[None] | None = None
@@ -95,7 +101,7 @@ class BackgroundJobCoordinator:
         async with self._lock:
             if self._active is not None:
                 return False
-            job = await self.repository.claim_next()
+            job = await self.repository.claim_next(kinds=self.kinds)
             if job is None:
                 return False
             cancel_event = asyncio.Event()

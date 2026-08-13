@@ -83,7 +83,7 @@ async def test_migration_13_creates_fts_vector_profile_and_retrieval_jobs(tmp_pa
         }
         violations = await (await connection.execute("PRAGMA foreign_key_check")).fetchall()
 
-    assert version == (13,)
+    assert version == (14,)
     assert {"retrieval_fts", "retrieval_embeddings", "retrieval_profiles"} <= tables
     assert job.kind is JobKind.RETRIEVAL_INDEX_MEMORY
     assert job.source_type == "memory"
