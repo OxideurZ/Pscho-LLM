@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-08-13T09:42:11.009126+00:00",
+  "generated_at": "2026-08-13T09:52:29.125295+00:00",
   "corpus_schema": "1.0",
   "development_cases": 10,
   "heldout_cases": 12,
   "frozen_threshold": 0.205352,
-  "frozen_agreement_score_floor": 0.011829,
+  "frozen_agreement_score_floor": 0.0,
   "metrics": {
     "development": {
       "lexical": {
         "recall_at_k": 0.7142857142857143,
         "mrr": 0.6428571428571429,
         "ndcg_at_k": 0.6615613933673511,
-        "precision_at_injected": 0.10204081632653061,
+        "precision_at_injected": 0.10416666666666667,
         "forbidden_injection_count": 0,
         "no_retrieval_correct": 1,
         "no_retrieval_total": 3,
@@ -79,7 +79,7 @@
         "recall_at_k": 0.75,
         "mrr": 0.6875,
         "ndcg_at_k": 0.7038662191964322,
-        "precision_at_injected": 0.14583333333333334,
+        "precision_at_injected": 0.1346153846153846,
         "forbidden_injection_count": 3,
         "no_retrieval_correct": 1,
         "no_retrieval_total": 4,
@@ -95,7 +95,7 @@
       "dense": {
         "recall_at_k": 1.0,
         "mrr": 0.875,
-        "ndcg_at_k": 0.8923843528101205,
+        "ndcg_at_k": 0.9077324383928644,
         "precision_at_injected": 0.05357142857142857,
         "forbidden_injection_count": 4,
         "no_retrieval_correct": 0,
@@ -154,24 +154,24 @@
   },
   "latency_ms": {
     "fts_ms": {
-      "p50": 15.000000000327418,
+      "p50": 15.499999999974534,
       "p95": 16.000000000531145
     },
     "embedding_ms": {
       "p50": 313.00000000010186,
-      "p95": 342.9999999998472
+      "p95": 328.9999999997235
     },
     "vector_ms": {
       "p50": 15.99999999962165,
       "p95": 30.99999999994907
     },
     "reranker_ms": {
-      "p50": 4187.499999999545,
-      "p95": 4609.000000000378
+      "p50": 4390.4999999999745,
+      "p95": 5140.000000000327
     },
     "total_ms": {
-      "p50": 4530.999999999494,
-      "p95": 4984.000000000378
+      "p50": 4726.000000000113,
+      "p95": 5484.000000000378
     }
   },
   "results": [
@@ -188,32 +188,32 @@
           "score": 0.008951938711106777
         },
         {
-          "source_id": "memory:alex_colleague",
-          "score": 0.0017438104841858149
+          "source_id": "raw:grinder_code",
+          "score": 0.0018836682429537177
         },
         {
-          "source_id": "raw:bicycle_code",
-          "score": 0.0013776132836937904
+          "source_id": "memory:alex_colleague",
+          "score": 0.0017438104841858149
         }
       ],
       "stages": {
         "lexical": [
           "memory:rare_orpheon",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:goal_marathon",
           "raw:jazz_duplicate",
           "memory:alex_colleague",
-          "memory:alex_cousin",
           "memory:event_jazz",
+          "memory:alex_cousin",
           "memory:voice_tea"
         ],
         "dense": [
           "memory:rare_orpheon",
           "raw:prompt_injection",
           "memory:event_jazz",
-          "raw:jazz_duplicate",
+          "raw:grinder_code",
           "memory:goal_marathon",
-          "raw:bicycle_code",
+          "raw:jazz_duplicate",
           "memory:alex_cousin",
           "raw:chatter",
           "memory:alex_colleague",
@@ -225,9 +225,9 @@
         ],
         "rrf": [
           "memory:rare_orpheon",
-          "raw:bicycle_code",
-          "raw:jazz_duplicate",
+          "raw:grinder_code",
           "memory:goal_marathon",
+          "raw:jazz_duplicate",
           "memory:event_jazz",
           "memory:alex_colleague",
           "memory:alex_cousin",
@@ -242,8 +242,8 @@
         "reranked": [
           "memory:rare_orpheon",
           "memory:goal_marathon",
-          "memory:alex_colleague",
-          "raw:bicycle_code"
+          "raw:grinder_code",
+          "memory:alex_colleague"
         ],
         "final": [
           "memory:rare_orpheon"
@@ -255,73 +255,74 @@
       "split": "development",
       "reranker_scores": [
         {
-          "source_id": "raw:bicycle_code",
-          "score": 0.9998315572738647
-        },
-        {
-          "source_id": "memory:rare_orpheon",
-          "score": 0.0008148839115165174
-        },
-        {
-          "source_id": "memory:alex_colleague",
-          "score": 0.0005378826172091067
+          "source_id": "raw:grinder_code",
+          "score": 0.9997133612632751
         },
         {
           "source_id": "memory:alex_cousin",
-          "score": 0.000371338683180511
+          "score": 0.00012079269072273746
+        },
+        {
+          "source_id": "memory:rare_orpheon",
+          "score": 0.00011199958680663258
+        },
+        {
+          "source_id": "memory:current_location",
+          "score": 7.445243682013825e-05
         }
       ],
       "stages": {
         "lexical": [
-          "memory:goal_marathon",
-          "raw:bicycle_code",
-          "memory:alex_colleague",
-          "raw:jazz_duplicate",
           "memory:alex_cousin",
+          "raw:grinder_code",
+          "memory:goal_marathon",
+          "raw:jazz_duplicate",
+          "memory:alex_colleague",
           "memory:event_jazz",
-          "memory:rare_orpheon",
-          "memory:voice_tea"
+          "memory:current_location",
+          "memory:old_location",
+          "memory:rare_orpheon"
         ],
         "dense": [
           "memory:rare_orpheon",
-          "raw:bicycle_code",
-          "memory:goal_marathon",
+          "raw:grinder_code",
+          "memory:voice_tea",
           "raw:prompt_injection",
           "memory:event_jazz",
           "raw:jazz_duplicate",
           "memory:preference_concise",
           "raw:chatter",
           "memory:alex_colleague",
-          "memory:belief_math",
+          "memory:goal_marathon",
           "memory:alex_cousin",
-          "memory:old_location",
           "memory:current_location",
-          "memory:voice_tea"
+          "memory:belief_math",
+          "memory:old_location"
         ],
         "rrf": [
-          "raw:bicycle_code",
-          "memory:goal_marathon",
+          "raw:grinder_code",
           "raw:jazz_duplicate",
-          "memory:rare_orpheon",
-          "memory:alex_colleague",
           "memory:event_jazz",
           "memory:alex_cousin",
+          "memory:rare_orpheon",
+          "memory:goal_marathon",
+          "memory:alex_colleague",
+          "memory:current_location",
+          "memory:old_location",
           "memory:voice_tea",
           "raw:prompt_injection",
           "memory:preference_concise",
           "raw:chatter",
-          "memory:belief_math",
-          "memory:old_location",
-          "memory:current_location"
+          "memory:belief_math"
         ],
         "reranked": [
-          "raw:bicycle_code",
+          "raw:grinder_code",
+          "memory:alex_cousin",
           "memory:rare_orpheon",
-          "memory:alex_colleague",
-          "memory:alex_cousin"
+          "memory:current_location"
         ],
         "final": [
-          "raw:bicycle_code"
+          "raw:grinder_code"
         ]
       }
     },
@@ -342,8 +343,8 @@
           "score": 0.01771395653486252
         },
         {
-          "source_id": "memory:rare_orpheon",
-          "score": 0.0004591500910464674
+          "source_id": "raw:grinder_code",
+          "score": 0.00046311193727888167
         }
       ],
       "stages": {
@@ -352,9 +353,9 @@
           "memory:preference_concise",
           "raw:prompt_injection",
           "memory:belief_math",
-          "raw:chatter",
+          "raw:grinder_code",
           "memory:rare_orpheon",
-          "raw:bicycle_code",
+          "raw:chatter",
           "memory:old_location",
           "raw:jazz_duplicate",
           "memory:goal_marathon",
@@ -368,9 +369,9 @@
           "memory:preference_concise",
           "raw:prompt_injection",
           "memory:belief_math",
-          "raw:chatter",
+          "raw:grinder_code",
           "memory:rare_orpheon",
-          "raw:bicycle_code",
+          "raw:chatter",
           "memory:old_location",
           "raw:jazz_duplicate",
           "memory:goal_marathon",
@@ -384,7 +385,7 @@
           "memory:preference_concise",
           "raw:prompt_injection",
           "memory:belief_math",
-          "memory:rare_orpheon"
+          "raw:grinder_code"
         ],
         "final": [
           "memory:preference_concise"
@@ -429,7 +430,7 @@
           "memory:preference_concise",
           "raw:jazz_duplicate",
           "memory:belief_math",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:old_location",
           "memory:event_jazz",
           "memory:current_location",
@@ -447,7 +448,7 @@
           "memory:goal_marathon",
           "raw:prompt_injection",
           "memory:rare_orpheon",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:old_location",
           "memory:current_location",
           "memory:alex_cousin",
@@ -476,9 +477,9 @@
           "memory:current_location",
           "raw:jazz_duplicate",
           "memory:preference_concise",
-          "raw:chatter",
+          "raw:grinder_code",
           "memory:event_jazz",
-          "raw:bicycle_code",
+          "raw:chatter",
           "memory:alex_cousin",
           "memory:rare_orpheon",
           "memory:belief_math",
@@ -492,9 +493,9 @@
           "memory:current_location",
           "raw:jazz_duplicate",
           "memory:preference_concise",
-          "raw:chatter",
+          "raw:grinder_code",
           "memory:event_jazz",
-          "raw:bicycle_code",
+          "raw:chatter",
           "memory:alex_cousin",
           "memory:rare_orpheon",
           "memory:belief_math",
@@ -513,9 +514,8 @@
       "stages": {
         "lexical": [
           "memory:voice_tea",
-          "raw:bicycle_code",
-          "memory:rare_orpheon",
           "raw:jazz_duplicate",
+          "memory:rare_orpheon",
           "memory:event_jazz",
           "memory:goal_marathon"
         ],
@@ -525,7 +525,7 @@
           "memory:alex_cousin",
           "raw:prompt_injection",
           "memory:old_location",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "raw:jazz_duplicate",
           "memory:belief_math",
@@ -536,9 +536,8 @@
           "memory:goal_marathon"
         ],
         "rrf": [
-          "raw:bicycle_code",
-          "memory:rare_orpheon",
           "raw:jazz_duplicate",
+          "memory:rare_orpheon",
           "memory:voice_tea",
           "memory:event_jazz",
           "memory:goal_marathon",
@@ -547,6 +546,7 @@
           "memory:alex_cousin",
           "raw:prompt_injection",
           "memory:old_location",
+          "raw:grinder_code",
           "memory:belief_math",
           "memory:alex_colleague",
           "memory:current_location"
@@ -589,9 +589,9 @@
           "memory:old_location",
           "raw:prompt_injection",
           "memory:current_location",
-          "raw:chatter",
+          "raw:grinder_code",
           "memory:voice_tea",
-          "raw:bicycle_code",
+          "raw:chatter",
           "memory:rare_orpheon",
           "raw:jazz_duplicate",
           "memory:preference_concise",
@@ -602,8 +602,8 @@
           "memory:event_jazz"
         ],
         "rrf": [
-          "raw:chatter",
           "raw:jazz_duplicate",
+          "raw:chatter",
           "memory:voice_tea",
           "memory:belief_math",
           "memory:preference_concise",
@@ -611,7 +611,7 @@
           "memory:old_location",
           "raw:prompt_injection",
           "memory:current_location",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "memory:alex_cousin",
           "memory:alex_colleague",
@@ -652,7 +652,7 @@
           "memory:event_jazz",
           "raw:jazz_duplicate",
           "memory:goal_marathon",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:alex_colleague"
         ],
         "dense": [
@@ -663,7 +663,7 @@
           "memory:old_location",
           "raw:prompt_injection",
           "memory:alex_cousin",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "memory:belief_math",
           "memory:goal_marathon",
@@ -674,7 +674,7 @@
         "rrf": [
           "memory:event_jazz",
           "raw:jazz_duplicate",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:goal_marathon",
           "memory:alex_colleague",
           "memory:current_location",
@@ -731,7 +731,7 @@
           "memory:alex_cousin",
           "raw:chatter",
           "memory:event_jazz",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "memory:alex_colleague",
           "memory:preference_concise",
@@ -747,7 +747,7 @@
           "memory:alex_cousin",
           "raw:chatter",
           "memory:event_jazz",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "memory:alex_colleague",
           "memory:preference_concise",
@@ -792,12 +792,11 @@
           "memory:voice_tea",
           "raw:jazz_duplicate",
           "memory:preference_concise",
-          "raw:bicycle_code",
-          "memory:event_jazz",
           "raw:chatter",
-          "memory:belief_math",
+          "memory:event_jazz",
           "memory:rare_orpheon",
-          "memory:goal_marathon"
+          "memory:goal_marathon",
+          "memory:belief_math"
         ],
         "dense": [
           "memory:voice_tea",
@@ -805,9 +804,9 @@
           "memory:preference_concise",
           "raw:prompt_injection",
           "memory:old_location",
-          "raw:jazz_duplicate",
+          "raw:grinder_code",
           "memory:belief_math",
-          "raw:bicycle_code",
+          "raw:jazz_duplicate",
           "memory:current_location",
           "memory:goal_marathon",
           "memory:rare_orpheon",
@@ -818,15 +817,15 @@
         "rrf": [
           "memory:voice_tea",
           "raw:chatter",
-          "raw:jazz_duplicate",
           "memory:preference_concise",
-          "raw:bicycle_code",
+          "raw:jazz_duplicate",
           "memory:belief_math",
           "memory:rare_orpheon",
           "memory:goal_marathon",
           "memory:event_jazz",
           "raw:prompt_injection",
           "memory:old_location",
+          "raw:grinder_code",
           "memory:current_location",
           "memory:alex_colleague",
           "memory:alex_cousin"
@@ -859,8 +858,8 @@
           "score": 0.00015245734539348632
         },
         {
-          "source_id": "raw:bicycle_code",
-          "score": 7.963764801388606e-05
+          "source_id": "raw:grinder_code",
+          "score": 4.537183849606663e-05
         }
       ],
       "stages": {
@@ -872,7 +871,7 @@
           "memory:belief_math",
           "raw:prompt_injection",
           "memory:preference_concise",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "raw:chatter",
           "memory:old_location",
@@ -888,7 +887,7 @@
           "raw:prompt_injection",
           "memory:preference_concise",
           "memory:belief_math",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "raw:chatter",
           "memory:old_location",
@@ -904,7 +903,7 @@
           "memory:belief_math",
           "memory:preference_concise",
           "raw:prompt_injection",
-          "raw:bicycle_code"
+          "raw:grinder_code"
         ],
         "final": [
           "memory:belief_math"
@@ -945,7 +944,7 @@
           "memory:rare_orpheon",
           "raw:prompt_injection",
           "memory:old_location",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:preference_concise",
           "memory:belief_math",
           "memory:goal_marathon",
@@ -961,7 +960,7 @@
           "memory:rare_orpheon",
           "raw:prompt_injection",
           "memory:old_location",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:preference_concise",
           "memory:belief_math",
           "memory:goal_marathon",
@@ -1018,7 +1017,7 @@
           "memory:alex_cousin",
           "raw:jazz_duplicate",
           "memory:event_jazz",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:preference_concise",
           "memory:rare_orpheon",
           "memory:belief_math",
@@ -1037,7 +1036,7 @@
           "memory:old_location",
           "raw:prompt_injection",
           "memory:alex_cousin",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "memory:alex_colleague",
           "memory:goal_marathon"
@@ -1082,7 +1081,7 @@
           "memory:old_location",
           "raw:prompt_injection",
           "memory:current_location",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:alex_cousin",
           "raw:jazz_duplicate",
           "memory:rare_orpheon",
@@ -1098,7 +1097,7 @@
           "memory:old_location",
           "raw:prompt_injection",
           "memory:current_location",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:alex_cousin",
           "raw:jazz_duplicate",
           "memory:rare_orpheon",
@@ -1126,73 +1125,75 @@
       "split": "heldout",
       "reranker_scores": [
         {
-          "source_id": "raw:bicycle_code",
-          "score": 0.704500138759613
+          "source_id": "raw:grinder_code",
+          "score": 0.9994809031486511
         },
         {
-          "source_id": "memory:alex_colleague",
-          "score": 0.0001175034703919664
-        },
-        {
-          "source_id": "memory:belief_math",
-          "score": 0.00010378509614383802
+          "source_id": "memory:current_location",
+          "score": 0.0029462366364896297
         },
         {
           "source_id": "memory:alex_cousin",
-          "score": 9.917921124724671e-05
+          "score": 0.0005006913561373949
+        },
+        {
+          "source_id": "memory:rare_orpheon",
+          "score": 0.00041226146277040243
         }
       ],
       "stages": {
         "lexical": [
           "memory:belief_math",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:goal_marathon",
           "raw:jazz_duplicate",
-          "memory:event_jazz",
-          "memory:alex_colleague",
           "memory:alex_cousin",
+          "memory:event_jazz",
+          "memory:current_location",
+          "memory:old_location",
+          "memory:alex_colleague",
           "memory:rare_orpheon"
         ],
         "dense": [
-          "memory:goal_marathon",
-          "raw:bicycle_code",
-          "memory:preference_concise",
-          "raw:prompt_injection",
           "memory:rare_orpheon",
-          "raw:chatter",
-          "memory:current_location",
-          "raw:jazz_duplicate",
+          "raw:grinder_code",
           "memory:old_location",
-          "memory:alex_cousin",
+          "raw:prompt_injection",
           "memory:voice_tea",
-          "memory:belief_math",
+          "raw:jazz_duplicate",
+          "memory:current_location",
+          "raw:chatter",
+          "memory:preference_concise",
           "memory:alex_colleague",
-          "memory:event_jazz"
+          "memory:event_jazz",
+          "memory:alex_cousin",
+          "memory:belief_math",
+          "memory:goal_marathon"
         ],
         "rrf": [
-          "raw:bicycle_code",
-          "memory:goal_marathon",
+          "raw:grinder_code",
           "raw:jazz_duplicate",
-          "memory:belief_math",
+          "memory:old_location",
           "memory:rare_orpheon",
+          "memory:current_location",
+          "memory:belief_math",
           "memory:alex_cousin",
           "memory:event_jazz",
+          "memory:goal_marathon",
           "memory:alex_colleague",
-          "memory:preference_concise",
           "raw:prompt_injection",
+          "memory:voice_tea",
           "raw:chatter",
-          "memory:current_location",
-          "memory:old_location",
-          "memory:voice_tea"
+          "memory:preference_concise"
         ],
         "reranked": [
-          "raw:bicycle_code",
-          "memory:alex_colleague",
-          "memory:belief_math",
-          "memory:alex_cousin"
+          "raw:grinder_code",
+          "memory:current_location",
+          "memory:alex_cousin",
+          "memory:rare_orpheon"
         ],
         "final": [
-          "raw:bicycle_code"
+          "raw:grinder_code"
         ]
       }
     },
@@ -1213,8 +1214,8 @@
           "score": 0.0035546566359698772
         },
         {
-          "source_id": "raw:bicycle_code",
-          "score": 0.0005512571078725159
+          "source_id": "raw:prompt_injection",
+          "score": 0.0005011315806768835
         }
       ],
       "stages": {
@@ -1226,7 +1227,7 @@
           "memory:alex_colleague",
           "raw:prompt_injection",
           "memory:alex_cousin",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:goal_marathon",
           "raw:jazz_duplicate",
           "memory:old_location",
@@ -1242,7 +1243,7 @@
           "memory:alex_colleague",
           "memory:alex_cousin",
           "raw:prompt_injection",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:goal_marathon",
           "raw:jazz_duplicate",
           "memory:old_location",
@@ -1258,7 +1259,7 @@
           "memory:alex_colleague",
           "memory:goal_marathon",
           "memory:alex_cousin",
-          "raw:bicycle_code"
+          "raw:prompt_injection"
         ],
         "final": [
           "memory:alex_colleague"
@@ -1282,16 +1283,16 @@
           "score": 0.00040455179987475276
         },
         {
-          "source_id": "memory:event_jazz",
-          "score": 0.00018474558601155877
+          "source_id": "raw:grinder_code",
+          "score": 0.00019696677918545902
         }
       ],
       "stages": {
         "lexical": [
           "memory:current_location",
-          "raw:bicycle_code",
-          "memory:event_jazz",
           "raw:jazz_duplicate",
+          "memory:event_jazz",
+          "raw:grinder_code",
           "memory:goal_marathon"
         ],
         "dense": [
@@ -1302,7 +1303,7 @@
           "memory:old_location",
           "raw:chatter",
           "memory:event_jazz",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "memory:preference_concise",
           "memory:alex_colleague",
@@ -1313,8 +1314,8 @@
         "rrf": [
           "memory:current_location",
           "raw:jazz_duplicate",
-          "raw:bicycle_code",
           "memory:event_jazz",
+          "raw:grinder_code",
           "memory:goal_marathon",
           "raw:prompt_injection",
           "memory:alex_cousin",
@@ -1330,7 +1331,7 @@
           "memory:current_location",
           "raw:prompt_injection",
           "memory:goal_marathon",
-          "memory:event_jazz"
+          "raw:grinder_code"
         ],
         "final": []
       }
@@ -1344,7 +1345,7 @@
           "memory:preference_concise",
           "raw:jazz_duplicate",
           "memory:belief_math",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:current_location",
           "raw:chatter",
           "memory:event_jazz",
@@ -1357,7 +1358,7 @@
           "memory:goal_marathon",
           "raw:chatter",
           "memory:current_location",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:belief_math",
           "raw:jazz_duplicate",
           "memory:old_location",
@@ -1370,8 +1371,8 @@
         "rrf": [
           "memory:preference_concise",
           "raw:jazz_duplicate",
-          "raw:bicycle_code",
           "raw:chatter",
+          "raw:grinder_code",
           "memory:belief_math",
           "memory:current_location",
           "memory:goal_marathon",
@@ -1396,12 +1397,12 @@
           "score": 0.2731616497039795
         },
         {
-          "source_id": "raw:bicycle_code",
-          "score": 0.0014618356944993138
-        },
-        {
           "source_id": "memory:rare_orpheon",
           "score": 0.0005345897516235709
+        },
+        {
+          "source_id": "raw:grinder_code",
+          "score": 0.0003770628827624023
         },
         {
           "source_id": "memory:preference_concise",
@@ -1416,7 +1417,7 @@
           "memory:preference_concise",
           "raw:prompt_injection",
           "memory:old_location",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "raw:chatter",
           "memory:current_location",
@@ -1432,7 +1433,7 @@
           "raw:prompt_injection",
           "memory:preference_concise",
           "memory:old_location",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "raw:chatter",
           "memory:current_location",
@@ -1446,8 +1447,8 @@
         ],
         "reranked": [
           "raw:prompt_injection",
-          "raw:bicycle_code",
           "memory:rare_orpheon",
+          "raw:grinder_code",
           "memory:preference_concise"
         ],
         "final": [
@@ -1460,8 +1461,8 @@
       "split": "heldout",
       "reranker_scores": [
         {
-          "source_id": "raw:bicycle_code",
-          "score": 0.01058291457593441
+          "source_id": "raw:grinder_code",
+          "score": 0.009169166907668114
         },
         {
           "source_id": "memory:rare_orpheon",
@@ -1473,7 +1474,7 @@
         },
         {
           "source_id": "raw:jazz_duplicate",
-          "score": 0.001992024015635252
+          "score": 0.001992035424336791
         }
       ],
       "stages": {
@@ -1484,9 +1485,9 @@
           "memory:rare_orpheon",
           "raw:chatter",
           "memory:current_location",
-          "raw:jazz_duplicate",
+          "raw:grinder_code",
           "memory:preference_concise",
-          "raw:bicycle_code",
+          "raw:jazz_duplicate",
           "memory:belief_math",
           "memory:alex_cousin",
           "memory:event_jazz",
@@ -1500,9 +1501,9 @@
           "memory:rare_orpheon",
           "raw:chatter",
           "memory:current_location",
-          "raw:jazz_duplicate",
+          "raw:grinder_code",
           "memory:preference_concise",
-          "raw:bicycle_code",
+          "raw:jazz_duplicate",
           "memory:belief_math",
           "memory:alex_cousin",
           "memory:event_jazz",
@@ -1511,7 +1512,7 @@
           "memory:goal_marathon"
         ],
         "reranked": [
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:rare_orpheon",
           "memory:current_location",
           "raw:jazz_duplicate"
@@ -1526,6 +1527,7 @@
       "stages": {
         "lexical": [
           "memory:current_location",
+          "raw:grinder_code",
           "memory:old_location",
           "memory:alex_cousin"
         ],
@@ -1533,11 +1535,11 @@
           "memory:old_location",
           "raw:prompt_injection",
           "memory:alex_cousin",
-          "raw:chatter",
+          "raw:grinder_code",
           "memory:preference_concise",
-          "raw:jazz_duplicate",
+          "raw:chatter",
           "memory:current_location",
-          "raw:bicycle_code",
+          "raw:jazz_duplicate",
           "memory:rare_orpheon",
           "memory:alex_colleague",
           "memory:belief_math",
@@ -1547,13 +1549,13 @@
         ],
         "rrf": [
           "memory:old_location",
+          "raw:grinder_code",
           "memory:current_location",
           "memory:alex_cousin",
           "raw:prompt_injection",
-          "raw:chatter",
           "memory:preference_concise",
+          "raw:chatter",
           "raw:jazz_duplicate",
-          "raw:bicycle_code",
           "memory:rare_orpheon",
           "memory:alex_colleague",
           "memory:belief_math",
@@ -1570,74 +1572,75 @@
       "split": "heldout",
       "reranker_scores": [
         {
-          "source_id": "raw:bicycle_code",
-          "score": 0.06630939245223999
+          "source_id": "raw:grinder_code",
+          "score": 0.996756374835968
         },
         {
           "source_id": "memory:event_jazz",
-          "score": 0.020177824422717094
+          "score": 0.002582225715741515
         },
         {
           "source_id": "raw:prompt_injection",
-          "score": 0.00013798760483041406
+          "score": 0.0001026885220198892
         },
         {
-          "source_id": "memory:alex_cousin",
-          "score": 2.457544360368047e-05
+          "source_id": "memory:current_location",
+          "score": 7.179288513725623e-05
         }
       ],
       "stages": {
         "lexical": [
           "memory:event_jazz",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:goal_marathon",
           "raw:prompt_injection",
-          "memory:rare_orpheon",
-          "raw:jazz_duplicate",
-          "memory:alex_colleague",
           "memory:alex_cousin",
-          "memory:voice_tea"
+          "raw:jazz_duplicate",
+          "memory:current_location",
+          "memory:old_location",
+          "memory:alex_colleague",
+          "memory:rare_orpheon"
         ],
         "dense": [
           "memory:event_jazz",
-          "raw:jazz_duplicate",
-          "memory:goal_marathon",
-          "raw:bicycle_code",
-          "memory:rare_orpheon",
-          "raw:prompt_injection",
-          "memory:old_location",
-          "raw:chatter",
-          "memory:alex_cousin",
-          "memory:current_location",
-          "memory:preference_concise",
+          "raw:grinder_code",
           "memory:voice_tea",
+          "raw:jazz_duplicate",
+          "memory:old_location",
+          "raw:prompt_injection",
+          "memory:current_location",
+          "raw:chatter",
+          "memory:rare_orpheon",
+          "memory:goal_marathon",
+          "memory:alex_cousin",
+          "memory:preference_concise",
           "memory:alex_colleague",
           "memory:belief_math"
         ],
         "rrf": [
           "memory:event_jazz",
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "raw:jazz_duplicate",
-          "memory:goal_marathon",
           "raw:prompt_injection",
-          "memory:rare_orpheon",
+          "memory:goal_marathon",
+          "memory:old_location",
+          "memory:current_location",
           "memory:alex_cousin",
+          "memory:rare_orpheon",
           "memory:alex_colleague",
           "memory:voice_tea",
-          "memory:old_location",
           "raw:chatter",
-          "memory:current_location",
           "memory:preference_concise",
           "memory:belief_math"
         ],
         "reranked": [
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:event_jazz",
           "raw:prompt_injection",
-          "memory:alex_cousin"
+          "memory:current_location"
         ],
         "final": [
-          "raw:bicycle_code",
+          "raw:grinder_code",
           "memory:event_jazz"
         ]
       }

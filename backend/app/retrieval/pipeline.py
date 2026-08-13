@@ -197,11 +197,11 @@ class RetrievalSelector:
         if threshold is not None:
             reranked = [
                 candidate
-                for candidate in reranked
+                for index, candidate in enumerate(reranked)
                 if candidate.reranker_score is not None
                 and (
                     candidate.reranker_score >= threshold
-                    or self._safe_multi_detail_override(query, candidate)
+                    or (index < 2 and self._safe_multi_detail_override(query, candidate))
                 )
             ]
         if not _has_historical_intent(query.current_user_text):

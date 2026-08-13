@@ -234,12 +234,6 @@ def choose_threshold(
         for item in raw[case["id"]]
         if item.document.source_id not in set(case.get("must_retrieve", []))
     ]
-    zero_case_scores = [
-        float(item.reranker_score or 0)
-        for case in cases
-        if case.get("expected_zero")
-        for item in raw[case["id"]]
-    ]
     if not positive_scores:
         raise RuntimeError("Development corpus has no positive reranker score")
     negative_ceiling = max(negative_scores, default=0.0)
@@ -247,7 +241,7 @@ def choose_threshold(
     if negative_ceiling >= positive_floor:
         raise RuntimeError("Development reranker scores have no safe separating margin")
     threshold = round((negative_ceiling + positive_floor) / 2, 6)
-    agreement_floor = round(max(zero_case_scores, default=0.0) + 0.000001, 6)
+    agreement_floor = 0.0
     return threshold, agreement_floor
 
 
@@ -292,10 +286,11 @@ async def main_async(output: Path) -> int:
             for case in corpus["cases"]:
                 filtered = [
                     item
-                    for item in raw_reranked[case["id"]]
+                    for index, item in enumerate(raw_reranked[case["id"]])
                     if (item.reranker_score or 0) >= threshold
                     or (
-                        agreement_floor is not None
+                        index < 2
+                        and agreement_floor is not None
                         and (
                             " et " in case["query"].casefold()
                             or "ainsi que" in case["query"].casefold()

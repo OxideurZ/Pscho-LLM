@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     retrieval_rrf_top_k: int = Field(default=16, ge=1, le=100)
     retrieval_max_items: int = Field(default=4, ge=1, le=20)
     retrieval_minimum_reranker_score: float | None = Field(default=0.205352, ge=0, le=1)
-    retrieval_agreement_score_floor: float | None = Field(default=0.011829, ge=0, le=1)
+    retrieval_agreement_score_floor: float | None = Field(default=0.0, ge=0, le=1)
     retrieval_context_budget_tokens: int = Field(default=4096, ge=256)
     retrieval_interactive_timeout_ms: int = Field(default=6000, ge=100, le=30_000)
     retrieval_query_prompt_id: str = "retrieval_query_instruction"

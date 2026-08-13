@@ -125,9 +125,7 @@ def test_backfill_requires_confirmation_and_audit_stays_debug_only(tmp_path: Pat
 
 
 def test_memory_disabled_does_not_enqueue_new_automatic_extraction(tmp_path: Path) -> None:
-    settings = settings_for(tmp_path / "app.sqlite").model_copy(
-        update={"memory_enabled": False}
-    )
+    settings = settings_for(tmp_path / "app.sqlite").model_copy(update={"memory_enabled": False})
     app = create_app(settings, FakeBackend())
     with TestClient(app) as client:
         conversation_id = client.post("/v1/conversations", json={}).json()["id"]

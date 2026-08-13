@@ -101,7 +101,9 @@ class MemoryRepository:
         ]
         parameters: list[object] = [created_before, f"memory_extract:{extractor_version}:"]
         # The source id is appended by SQLite; concatenation keeps the version-specific dedupe exact.
-        conditions[-1] = conditions[-1].replace("prior.dedupe_key = ?", "prior.dedupe_key = ? || message.id")
+        conditions[-1] = conditions[-1].replace(
+            "prior.dedupe_key = ?", "prior.dedupe_key = ? || message.id"
+        )
         if created_after is not None:
             conditions.append("message.created_at >= ?")
             parameters.append(created_after)
@@ -121,7 +123,13 @@ class MemoryRepository:
         extractor_version: str,
     ) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
-        scope_kind = "conversations" if conversation_ids else "date_range" if (created_after or created_before) else "all_eligible"
+        scope_kind = (
+            "conversations"
+            if conversation_ids
+            else "date_range"
+            if (created_after or created_before)
+            else "all_eligible"
+        )
         before = created_before or now
         conditions, parameters = self._backfill_conditions(
             conversation_ids=conversation_ids,
@@ -269,7 +277,9 @@ class MemoryRepository:
         async with self.database.connect() as connection:
             connection.row_factory = aiosqlite.Row
             backfill = await (
-                await connection.execute("SELECT * FROM memory_backfills WHERE id = ?", (job.backfill_id,))
+                await connection.execute(
+                    "SELECT * FROM memory_backfills WHERE id = ?", (job.backfill_id,)
+                )
             ).fetchone()
             if backfill is None or backfill["status"] != "pending":
                 return MemoryBackfillBatch(job.backfill_id, ())
@@ -298,8 +308,12 @@ class MemoryRepository:
         return MemoryBackfillBatch(job.backfill_id, tuple(str(row["id"]) for row in rows))
 
     async def persist_backfill(
-        self, connection: aiosqlite.Connection, job: JobRecord, batch: MemoryBackfillBatch,
-        *, max_attempts: int,
+        self,
+        connection: aiosqlite.Connection,
+        job: JobRecord,
+        batch: MemoryBackfillBatch,
+        *,
+        max_attempts: int,
     ) -> None:
         if job.backfill_id is None or batch.backfill_id != job.backfill_id:
             raise MemorySourceIneligibleError("backfill result does not match job")
@@ -356,11 +370,15 @@ class MemoryRepository:
                 (now, job.backfill_id),
             )
 
-    async def backfill_progress(self, backfill_identifier: str, *, batch_size: int | None = None) -> dict[str, Any]:
+    async def backfill_progress(
+        self, backfill_identifier: str, *, batch_size: int | None = None
+    ) -> dict[str, Any]:
         async with self.database.connect() as connection:
             connection.row_factory = aiosqlite.Row
             backfill = await (
-                await connection.execute("SELECT * FROM memory_backfills WHERE id = ?", (backfill_identifier,))
+                await connection.execute(
+                    "SELECT * FROM memory_backfills WHERE id = ?", (backfill_identifier,)
+                )
             ).fetchone()
             if backfill is None:
                 raise MemoryNotFoundError(backfill_identifier)
@@ -388,10 +406,14 @@ class MemoryRepository:
                 )
             ).fetchone()
         return {
-            "id": backfill["id"], "status": backfill["status"],
-            "scope_kind": backfill["scope_kind"], "eligible": backfill["eligible_messages"],
-            "processed": int(counts["processed"] or 0), "pending": int(counts["pending"] or 0),
-            "failed": int(counts["failed"] or 0), "memories_created": int(created[0]),
+            "id": backfill["id"],
+            "status": backfill["status"],
+            "scope_kind": backfill["scope_kind"],
+            "eligible": backfill["eligible_messages"],
+            "processed": int(counts["processed"] or 0),
+            "pending": int(counts["pending"] or 0),
+            "failed": int(counts["failed"] or 0),
+            "memories_created": int(created[0]),
             "created_at": backfill["created_at"],
         }
 
