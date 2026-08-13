@@ -27,7 +27,7 @@ Cette décision autorise l'implémentation des interfaces ; elle ne ferme pas Mi
 | Python | 3.12.13 |
 | Retrieval | PyTorch 2.6.0 CPU-only + Transformers 4.51.3 |
 | Device | `cpu` obligatoire pour embedding/reranking |
-| Process model choisi | worker retrieval local dédié, possédé par le lifecycle applicatif |
+| Process model choisi | runtime CPU lazy dans le backend, appels lourds déportés via `asyncio.to_thread`, possédé et déchargé par le lifecycle applicatif |
 
 Le worker devra charger les modèles hors du chemin interactif et les conserver prêts. Il sera
 arrêté par le même lifecycle que l'application afin de libérer la RAM. Le chat garde la priorité :

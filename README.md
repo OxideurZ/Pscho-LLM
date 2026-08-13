@@ -288,6 +288,11 @@ Le premier rapport matériel contrôlé est disponible dans
 | `CONTEXT_SAFETY_MARGIN_TOKENS` | `512` | marge réservée du contexte |
 | `SUMMARY_BUDGET_TOKENS` | `4096` | budget de sortie du rolling summary |
 | `RECENT_RAW_BUDGET_TOKENS` | `24000` | borne des messages bruts récents |
+| `RETRIEVAL_*_TOP_K` | `12 / 12 / 16 / 8` | lexical, dense, fusion RRF et reranking |
+| `RETRIEVAL_MAX_ITEMS` | `4` | maximum injecté, zéro restant valide |
+| `RETRIEVAL_MINIMUM_RERANKER_SCORE` | `0.205352` | seuil gelé sur le split development |
+| `RETRIEVAL_CONTEXT_BUDGET_TOKENS` | `4096` | historique sacrifié avant le contexte courant |
+| `RETRIEVAL_INTERACTIVE_TIMEOUT_MS` | `6000` | borne dure avant fallback sans retrieval |
 | `PROMPT_ID` / `VERSION` | `conversation_system` / `0.1.2` | prompt versionné et hashé |
 | `MODEL_NAME` / `PATH` | baseline Qwen | identification locale |
 | `MODEL_EXPECTED_SHA256` | hash canonique | garde-fou benchmark |
@@ -317,9 +322,13 @@ les logs ne contiennent que les identifiants, hashes, états, durées et compteu
 - `SHA256 mismatch` : supprimer puis récupérer à nouveau le GGUF ; ne pas lancer de benchmark.
 - santé `degraded` : lire séparément les états `database` et `llm` dans la réponse JSON.
 
-## Limites de Milestone B
+## État après Milestone G
 
-Il existe désormais des conversations, sessions, messages et summaries persistants, mais aucune
-Memory v1 cross-conversation, aucun retrieval, embedding, vector store, microphone, Whisper, Tauri,
-chiffrement final ou cloud. L’application n’est pas un dispositif médical et ne remplace pas un
-professionnel ou un service d’urgence.
+Les conversations, summaries, Memory v1, la voix locale et le retrieval hybride sont persistants
+dans SQLCipher. Le retrieval indexe uniquement les messages USER éligibles et les memories actives
+ou historiques, puis combine FTS5, embeddings, RRF et reranking. Les indexes sont dérivés et
+reconstructibles ; un résultat vide est normal. L’historique injecté reste une donnée non fiable,
+jamais une instruction, et le USER courant garde la priorité. Aucun service cloud n’est utilisé.
+
+L’application n’est pas un dispositif médical et ne remplace pas un professionnel ou un service
+d’urgence.
